@@ -1,0 +1,117 @@
+#include <iostream>
+#include <lexer.h>
+
+std::optional<TokenDef> Lexer::matchToken() {
+        std::optional<TokenDef> best;
+
+        for (const auto& def : token_defs) {
+                std::string_view input{
+                        source.data() + position,
+                        source.size() - position
+                    };
+
+                if (input.starts_with(def.text)) {
+                        if (!best || def.text.size() > best->text.size()) {
+                                best = def;
+                        }
+                }
+        }
+
+        return best;
+}
+
+void Lexer::releaseIdentifier(std::string &currentIdentifier, const IdentifierType currentIdentifierType) {
+        if (!currentIdentifier.empty()) {
+                auto token = Token{
+                        .tokenStart = position - currentIdentifier.size() - 1,
+                        .tokenEnd = position - 1
+                };
+                switch (currentIdentifierType) {
+
+                        case IdentifierType::NORMAL:
+                                token.tokenType = Tokens::IDENTIFIER;
+                                break;
+                        case IdentifierType::INTEGRAL:
+                                token.tokenType = Tokens::INT_LITERAL;
+                                break;
+                        case IdentifierType::FLOATING:
+                                token.tokenType = Tokens::FLOAT_LITERAL;
+                                break;
+                }
+                tokens.push_back(token);
+                currentIdentifier.clear();
+        }
+}
+
+void Lexer::skipComments() {
+        const bool isSingleLineComment = position + 1 < source.size()
+                ? source[position] == '/' && source[position+1] == '/' : false;
+
+        if (isSingleLineComment) {
+                while (position + 1 < source.size() && source[position] != '\n') { ++position; }
+                if (position < source.size() && source[position] == '\n') { ++position; } // Skip newline
+                return;
+        }
+
+        const bool isMultiLineComment = position + 1 < source.size()
+                ? source[position] == '/' && source[position+1] == '*' : false;
+
+        if (isMultiLineComment) {
+                while (position + 1 < source.size()) {
+                        ++position;
+                        if (source[position] == '*' && source[position+1] == '/') { break; }
+                }
+                if (position + 1 < source.size()) { position += 2; } // Skip '*/'
+        }
+}
+
+void Lexer::run() {
+        std::string currentIdentifier{};
+        IdentifierType currentIdentifierType{};
+
+        while (position < source.size()) {
+                skipComments();
+
+                const bool dotPartOfFloat = position + 1 < source.size() ? isdigit(source[position+1]) || source[position+1] == 'f' : false;
+                if (source[position] == '.' && dotPartOfFloat) {/* skip dots that are part of floats */}
+                else {
+                        if (const auto match = matchToken()) {
+                                // Release current identifier if any
+                                releaseIdentifier(currentIdentifier, currentIdentifierType);
+
+                                const auto tokenStart = position;
+                                position += match->text.size();
+                                tokens.push_back(Token{
+                                    .tokenType = match->token,
+                                    .tokenStart = tokenStart,
+                                    .tokenEnd = position
+                                });
+                                continue;
+                        }
+                }
+
+                if (source[position] == ' ' || source[position] == '\n' || source[position] == '\t' || source[position] == '\r') {
+                        releaseIdentifier(currentIdentifier, currentIdentifierType);
+                        ++position;
+                        continue;
+                }
+
+                if (currentIdentifier.empty()) {
+                        currentIdentifier += source[position];
+                        if (std::isalpha(currentIdentifier[0]) || currentIdentifier.starts_with('_'))
+                                currentIdentifierType = IdentifierType::NORMAL;
+                        if (std::isdigit(currentIdentifier[0]))
+                                currentIdentifierType = IdentifierType::INTEGRAL;
+                        if (currentIdentifier.starts_with('.'))
+                                currentIdentifierType = IdentifierType::FLOATING;
+                } else {
+                        currentIdentifier += source[position];
+                        if (currentIdentifierType == IdentifierType::INTEGRAL) {
+                                if (source[position] == '.' || source[position] == 'f')
+                                        currentIdentifierType = IdentifierType::FLOATING;
+                        }
+                }
+
+                ++position;
+        }
+}
