@@ -37,8 +37,15 @@ void Lexer::releaseIdentifier(std::string &currentIdentifier, const IdentifierTy
                         case IdentifierType::FLOATING:
                                 token.tokenType = Tokens::FLOAT_LITERAL;
                                 break;
+                        case IdentifierType::STR:
+                                token.tokenType = Tokens::STR_LITERAL;
+                                break;
+                        case IdentifierType::CHAR:
+                                token.tokenType = Tokens::CHAR_LITERAL;
+                                break;
                 }
                 tokens.push_back(token);
+                std::cout << currentIdentifier << ' ';
                 currentIdentifier.clear();
         }
 }
@@ -65,28 +72,98 @@ void Lexer::skipComments() {
         }
 }
 
+ void Lexer::updateState(const TokenDef& token, std::stack<InsideType>& insideStack, IdentifierType& currentIdentifierType) {
+
+        switch (token.token) {
+                case Tokens::INTERP: {
+                        insideStack.push(InsideType::INTERP);
+                        currentIdentifierType = IdentifierType::NORMAL;
+                        return;
+                }
+
+                case Tokens::STR: {
+                        if (!insideStack.empty() && insideStack.top() == InsideType::STR) {
+                                insideStack.pop();
+                                currentIdentifierType = IdentifierType::NORMAL;
+                                return;
+                        }
+
+                        insideStack.push(InsideType::STR);
+                        currentIdentifierType = IdentifierType::STR;
+                        return;
+                }
+
+                case Tokens::CHAR: {
+                        if (!insideStack.empty() && insideStack.top() == InsideType::CHAR) {
+                                insideStack.pop();
+                                currentIdentifierType = IdentifierType::NORMAL;
+                                return;
+                        }
+
+                        insideStack.push(InsideType::CHAR);
+                        currentIdentifierType = IdentifierType::CHAR;
+                        return;
+                }
+
+                case Tokens::L_BRACE: {
+                        insideStack.push(InsideType::BRACE);
+                        return;
+                }
+
+                case Tokens::R_BRACE: {
+                        if (!insideStack.empty() && (insideStack.top() == InsideType::BRACE || insideStack.top() == InsideType::INTERP)) {
+                                insideStack.pop();
+                                if (!insideStack.empty()) {
+                                        switch (insideStack.top()) {
+                                                case InsideType::STR:
+                                                        currentIdentifierType = IdentifierType::STR;
+                                                        break;
+                                                case InsideType::CHAR:
+                                                        currentIdentifierType = IdentifierType::CHAR;
+                                                        break;
+                                                default: currentIdentifierType = IdentifierType::NORMAL;
+                                        }
+
+                                }
+                        }
+                }
+
+                default:;
+        }
+}
+
 void Lexer::run() {
+        std::stack<InsideType> insideStack{};
         std::string currentIdentifier{};
         IdentifierType currentIdentifierType{};
 
         while (position < source.size()) {
                 skipComments();
 
-                const bool dotPartOfFloat = position + 1 < source.size() ? isdigit(source[position+1]) || source[position+1] == 'f' : false;
+                const bool dotPartOfFloat = position + 1 < source.size() ?
+                        (isdigit(source[position+1]) || source[position+1] == 'f')
+                        && currentIdentifierType == IdentifierType::INTEGRAL
+                : false;
+
                 if (source[position] == '.' && dotPartOfFloat) {/* skip dots that are part of floats */}
                 else {
                         if (const auto match = matchToken()) {
-                                // Release current identifier if any
-                                releaseIdentifier(currentIdentifier, currentIdentifierType);
+                                const auto previousIdentifierType = currentIdentifierType;
+                                updateState(match.value(), insideStack, currentIdentifierType);
+                                const bool isInsideToken = match->token == Tokens::STR || match->token == Tokens::CHAR || match->token == Tokens::INTERP;
+                                if (isInsideToken || (previousIdentifierType != IdentifierType::STR && previousIdentifierType != IdentifierType::CHAR)) {
+                                        // Release current identifier if any
+                                        releaseIdentifier(currentIdentifier, currentIdentifierType);
 
-                                const auto tokenStart = position;
-                                position += match->text.size();
-                                tokens.push_back(Token{
-                                    .tokenType = match->token,
-                                    .tokenStart = tokenStart,
-                                    .tokenEnd = position
-                                });
-                                continue;
+                                        const auto tokenStart = position;
+                                        position += match->text.size();
+                                        tokens.push_back(Token{
+                                            .tokenType = match->token,
+                                            .tokenStart = tokenStart,
+                                            .tokenEnd = position
+                                        });
+                                        continue;
+                                }
                         }
                 }
 
