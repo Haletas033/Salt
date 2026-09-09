@@ -23,8 +23,8 @@ std::optional<TokenDef> Lexer::matchToken() {
 void Lexer::releaseIdentifier(std::string &currentIdentifier, const IdentifierType currentIdentifierType) {
         if (!currentIdentifier.empty()) {
                 auto token = Token{
-                        .tokenStart = position - currentIdentifier.size() - 1,
-                        .tokenEnd = position - 1
+                        .tokenStart = position - currentIdentifier.size(),
+                        .tokenEnd = position
                 };
                 switch (currentIdentifierType) {
 
@@ -84,7 +84,20 @@ void Lexer::skipComments() {
                 case Tokens::STR: {
                         if (!insideStack.empty() && insideStack.top() == InsideType::STR) {
                                 insideStack.pop();
-                                currentIdentifierType = IdentifierType::NORMAL;
+                                if (!insideStack.empty()) {
+                                        switch (insideStack.top()) {
+                                                case InsideType::STR:
+                                                        currentIdentifierType = IdentifierType::STR;
+                                                        break;
+                                                case InsideType::INTERP:
+                                                        currentIdentifierType = IdentifierType::NORMAL;
+                                                        break;
+                                                default:
+                                                        currentIdentifierType = IdentifierType::NORMAL;
+                                        }
+                                } else {
+                                        currentIdentifierType = IdentifierType::NORMAL;
+                                }
                                 return;
                         }
 
@@ -126,6 +139,7 @@ void Lexer::skipComments() {
 
                                 }
                         }
+
                 }
 
                 default:;
@@ -153,7 +167,7 @@ void Lexer::run() {
                                 const bool isInsideToken = match->token == Tokens::STR || match->token == Tokens::CHAR || match->token == Tokens::INTERP;
                                 if (isInsideToken || (previousIdentifierType != IdentifierType::STR && previousIdentifierType != IdentifierType::CHAR)) {
                                         // Release current identifier if any
-                                        releaseIdentifier(currentIdentifier, currentIdentifierType);
+                                        releaseIdentifier(currentIdentifier, previousIdentifierType);
 
                                         const auto tokenStart = position;
                                         position += match->text.size();
@@ -173,7 +187,7 @@ void Lexer::run() {
                         continue;
                 }
 
-                if (currentIdentifier.empty()) {
+                if (currentIdentifier.empty() && currentIdentifierType != IdentifierType::STR && currentIdentifierType != IdentifierType::CHAR) {
                         currentIdentifier += source[position];
                         if (std::isalpha(currentIdentifier[0]) || currentIdentifier.starts_with('_'))
                                 currentIdentifierType = IdentifierType::NORMAL;
@@ -191,4 +205,5 @@ void Lexer::run() {
 
                 ++position;
         }
+        releaseIdentifier(currentIdentifier, currentIdentifierType);
 }
