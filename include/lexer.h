@@ -27,7 +27,6 @@ enum class InsideType {
 
 class Lexer {
 private:
-        std::string source{};
         unsigned long position{};
 
         std::optional<TokenDef> matchToken();
@@ -41,6 +40,7 @@ private:
 
         void run();
 public:
+        std::string source{};
         std::vector<Token> tokens{};
 
         explicit Lexer(const std::ifstream& file) {

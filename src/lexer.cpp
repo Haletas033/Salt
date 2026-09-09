@@ -45,7 +45,6 @@ void Lexer::releaseIdentifier(std::string &currentIdentifier, const IdentifierTy
                                 break;
                 }
                 tokens.push_back(token);
-                std::cout << currentIdentifier << ' ';
                 currentIdentifier.clear();
         }
 }
@@ -206,4 +205,9 @@ void Lexer::run() {
                 ++position;
         }
         releaseIdentifier(currentIdentifier, currentIdentifierType);
+        tokens.push_back(Token{
+            .tokenType = Tokens::EOF_TOKEN,
+            .tokenStart = position - 1,
+            .tokenEnd = position
+        });
 }

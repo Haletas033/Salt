@@ -8,6 +8,8 @@ add_executable(Salt
         src/lexer.cpp
         include/lexer.h
         include/tokens.h
+        src/parser.cpp
+        include/parser.h
 )
 
 target_include_directories(Salt PRIVATE

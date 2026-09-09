@@ -2,6 +2,7 @@
 #include <fstream>
 
 #include "lexer.h"
+#include "parser.h"
 
 int main(const int argc, char **argv) {
         if (argc != 2) {
@@ -18,7 +19,6 @@ int main(const int argc, char **argv) {
         }
 
         Lexer lexer(fileContents);
-        for (const auto &token : lexer.tokens) {
-                std::cout << tokenStrings[static_cast<int>(token.tokenType)] << " ";
-        }
+
+        Parser parser(lexer.source, lexer.tokens);
 }
