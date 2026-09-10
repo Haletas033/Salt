@@ -8,13 +8,21 @@
 
 struct Node;
 
+struct AnnotationArg {
+        enum class Type { IDENTIFIER, INTEGER, FLOATING, STR, CHAR};
+        Type type;
+        std::string value;
+};
+
 struct Annotation {
         std::string name{};
-        std::vector<std::string> args{};
+        std::vector<AnnotationArg> args{};
 };
 
 struct ReturnStatement {
-        std::string output;
+        enum class Type { IDENTIFIER, INTEGER, FLOATING, STR, CHAR};
+        Type type;
+        std::string value;
 };
 
 struct Parameter {
@@ -46,9 +54,11 @@ private:
         [[nodiscard]] Token peek(size_t offset) const;
         Token expect(Tokens tokenType);
 
-        void parseAnnotation();
+        Annotation parseAnnotation();
 
-        void parseFunctionDef();
+        ReturnStatement parseReturnStatement();
+
+        FunctionDef parseFunctionDef();
 
         [[nodiscard]] std::string_view getTokenStr(const Token& token) const;
 
