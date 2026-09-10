@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 
+#include "codegen.h"
 #include "lexer.h"
 #include "parser.h"
 
@@ -21,4 +22,8 @@ int main(const int argc, char **argv) {
         Lexer lexer(fileContents);
 
         Parser parser(lexer.source, lexer.tokens);
+
+        Codegen codegen(parser.program, "test");
+
+        codegen.module.print(llvm::outs(), nullptr);
 }

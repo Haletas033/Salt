@@ -4,7 +4,6 @@ project(Salt)
 set(CMAKE_CXX_STANDARD 20)
 
 find_package(LLVM REQUIRED CONFIG)
-llvm_map_components_to_libnames(LLVM_LIBS core support irreader)
 
 add_executable(Salt
         src/main.cpp
@@ -13,6 +12,8 @@ add_executable(Salt
         include/tokens.h
         src/parser.cpp
         include/parser.h
+        include/codegen.h
+        src/codegen.cpp
 )
 
 target_include_directories(Salt PRIVATE
@@ -20,5 +21,5 @@ target_include_directories(Salt PRIVATE
         ${LLVM_INCLUDE_DIRS}
 )
 
-target_link_libraries(Salt PRIVATE ${LLVM_LIBS})
+target_link_libraries(Salt PRIVATE LLVM-22)
 target_compile_definitions(Salt PRIVATE ${LLVM_DEFINITIONS})
