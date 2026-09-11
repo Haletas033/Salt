@@ -23,7 +23,9 @@ private:
 
         void emitAnnotation(const Annotation &annotation);
 
-        void emitReturnStatement(const ReturnStatement &statement, llvm::Type *returnType, llvm::IRBuilder<> &builder);
+        llvm::Value *emitExpr(const Expr &expr, llvm::IRBuilder<> &builder);
+
+        void emitReturnStatement(const ReturnStatement &statement, llvm::IRBuilder<> &builder);
 
         void emitFunctionDef(const FunctionDef &functionDef);
 

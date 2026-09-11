@@ -23,7 +23,7 @@ int main(const int argc, char **argv) {
 
         Parser parser(lexer.source, lexer.tokens);
 
-        Codegen codegen(parser.program, "test");
+        Codegen codegen(std::move(parser.program), "test");
 
         codegen.module.print(llvm::outs(), nullptr);
 }

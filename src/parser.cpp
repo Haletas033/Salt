@@ -23,6 +23,79 @@ Token Parser::expect(const Tokens tokenType) {
         throw std::logic_error(errorMessage);
 }
 
+std::optional<Operator> Parser::getOperator() const {
+        Operator result{};
+        switch (peek().tokenType) {
+                case Tokens::PLUS:
+                        result = {Operator::Type::ADD, 5};
+                        break;
+
+                case Tokens::SUB:
+                        result = {Operator::Type::SUB, 5};
+                        break;
+
+                case Tokens::STAR:
+                        result = {Operator::Type::MUL, 6};
+                        break;
+
+                case Tokens::DIV:
+                        result = {Operator::Type::DIV, 6};
+                        break;
+
+                default:
+                        return std::nullopt;
+        }
+        return result;
+}
+
+Expr Parser::parsePrimary() {
+        Expr result{};
+        switch (peek().tokenType) {
+                case Tokens::INT_LITERAL: {
+                        result = IntLiteral{std::stoi(std::string{getTokenStr(peek())})};
+                        ++position;
+                        return result;
+                }
+
+                case Tokens::FLOAT_LITERAL: {
+                        result = FloatLiteral{std::stof(std::string{getTokenStr(peek())})};
+                        ++position;
+                        return result;
+                }
+
+                case Tokens::STR: {
+                        ++position;
+                        result = StrLiteral{std::string{getTokenStr(expect(Tokens::STR_LITERAL))}};
+                        expect(Tokens::STR);
+                        return result;
+                }
+
+                case Tokens::IDENTIFIER:
+                        result = Identifier{std::string{getTokenStr(peek())}};
+                        ++position;
+                        return result;
+                default:
+                        throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
+        }
+}
+
+Expr Parser::parseExpr(int minPrecedence = 0) {
+        Expr left = parsePrimary();
+        while (true) {
+                std::optional<Operator> op = getOperator();
+                if (!op.has_value()) { break; }
+                if (op->precedence < minPrecedence) { break; }
+                ++position;
+                Expr right = parseExpr(op->precedence + 1);
+                left = BinaryOp{
+                        std::make_unique<Expr>(std::move(left)),
+                        std::make_unique<Expr>(std::move(right)),
+                        op->type
+                };
+        }
+        return left;
+}
+
 Annotation Parser::parseAnnotation() {
         const size_t start = position;
         Annotation result{};
@@ -73,54 +146,14 @@ ReturnStatement Parser::parseReturnStatement() {
 
         // Handle literals
         if (peek().tokenType != Tokens::L_BRACE) {
-                const std::string output{getTokenStr(peek())};
-                switch (peek().tokenType) {
-                        case Tokens::INT_LITERAL: {
-                                result.type = ReturnStatement::Type::INTEGER;
-                                result.value = output;
-                                break;
-                        }
-
-                        case Tokens::FLOAT_LITERAL: {
-                                result.type = ReturnStatement::Type::FLOATING;
-                                result.value = output;
-                                break;
-                        }
-
-                        case Tokens::STR: {
-                                ++position;
-                                result.type = ReturnStatement::Type::STR;
-                                result.value = getTokenStr(expect(Tokens::STR_LITERAL));
-                                expect(Tokens::STR);
-                                break;
-                        }
-
-                        case Tokens::CHAR: {
-                                ++position;
-                                result.type = ReturnStatement::Type::CHAR;
-                                result.value = getTokenStr(expect(Tokens::CHAR_LITERAL));
-                                expect(Tokens::CHAR);
-                                break;
-                        }
-
-                        case Tokens::IDENTIFIER: {
-                                throw std::logic_error("IDENTIFIERS AND STATEMENTS IN RETURNS NEED TO BE WRAPPED IN BRACES");
-                                break;
-                        }
-
-                        default: {
-                                throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
-                        }
-                }
-                ++position;
+                result.value = parseExpr();
                 expect(Tokens::SEMI_COLON);
                 return result;
         }
 
         // Handle braced
         ++position;
-        result.type = ReturnStatement::Type::IDENTIFIER;
-        result.value = getTokenStr(expect(Tokens::IDENTIFIER));
+        result.value = parseExpr();
         if (peek().tokenType == Tokens::SEMI_COLON) { ++position; } // Allow both semi-colon and no semi-colon in braces
         expect(Tokens::R_BRACE);
         expect(Tokens::SEMI_COLON);
@@ -163,7 +196,11 @@ FunctionDef Parser::parseFunctionDef() {
                 if (peek().tokenType == Tokens::IDENTIFIER && getTokenStr(peek()) == "return") {
                         size_t start = position;
                         ReturnStatement statement = parseReturnStatement();
-                        result.body.push_back({start, position, statement});
+                        result.body.push_back(Node{
+                            .tokenStart = start,
+                            .tokenEnd = position,
+                            .value = std::move(statement)
+                        });
                         break;
                 }
 
@@ -190,7 +227,7 @@ void Parser::run() {
                                 if (peek(i).tokenType == Tokens::L_PARENTHESES) {
                                         const size_t start = position;
                                         FunctionDef functionDef = parseFunctionDef();
-                                        program.push_back({start, position, functionDef});
+                                        program.push_back({start, position, std::move(functionDef)});
                                         break;
                                 }
 
@@ -215,7 +252,6 @@ void Parser::run() {
 
                         continue;
                 }
-
 
                 throw std::logic_error("UNKNOWN TOKEN TYPE " + tokenStrings[static_cast<int>(peek().tokenType)]);
         }

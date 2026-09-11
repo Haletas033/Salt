@@ -1,12 +1,46 @@
 #ifndef SALT_PARSER_H
 #define SALT_PARSER_H
+#include <memory>
 #include <string>
 #include <variant>
 #include <vector>
 
 #include "lexer.h"
 
+struct BinaryOp;
 struct Node;
+
+struct IntLiteral {
+        int value{};
+};
+
+struct FloatLiteral {
+        float value{};
+};
+
+struct StrLiteral {
+        std::string value{};
+};
+
+struct Identifier {
+        std::string name{};
+};
+
+struct Operator {
+        enum class Type {
+                ADD, SUB,
+                MUL, DIV
+        };
+        Type type{};
+        int precedence{};
+};
+
+using Expr = std::variant<IntLiteral, FloatLiteral, StrLiteral, Identifier, BinaryOp>;
+struct BinaryOp {
+        std::unique_ptr<Expr> lvalue{};
+        std::unique_ptr<Expr> rvalue{};
+        Operator op{};
+};
 
 struct AnnotationArg {
         enum class Type { IDENTIFIER, INTEGER, FLOATING, STR, CHAR};
@@ -20,9 +54,7 @@ struct Annotation {
 };
 
 struct ReturnStatement {
-        enum class Type { IDENTIFIER, INTEGER, FLOATING, STR, CHAR};
-        Type type;
-        std::string value;
+        Expr value;
 };
 
 struct Parameter {
@@ -53,6 +85,12 @@ private:
 
         [[nodiscard]] Token peek(size_t offset) const;
         Token expect(Tokens tokenType);
+
+        std::optional<Operator> getOperator() const;
+
+        Expr parsePrimary();
+
+        Expr parseExpr(int minPrecedence);
 
         Annotation parseAnnotation();
 

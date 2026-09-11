@@ -4,18 +4,39 @@ void Codegen::emitAnnotation(const Annotation& annotation) {
 
 }
 
-void Codegen::emitReturnStatement(const ReturnStatement& statement, llvm::Type* returnType, llvm::IRBuilder<>& builder) {
-        std::string resolvedReturn{};
-        if (statement.value == "SUCCESS")
-                resolvedReturn = "0";
-        else if (statement.value == "FAILURE")
-                resolvedReturn = "1";
-        else
-                resolvedReturn = statement.value;
+llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
+        return std::visit([this, &builder]<typename V>(const V& value) -> llvm::Value* {
+                using T = std::decay_t<V>;
+                if constexpr (std::same_as<T, IntLiteral>) {
+                        return llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), value.value);
+                } else if constexpr (std::same_as<T, FloatLiteral>) {
+                        return llvm::ConstantFP::get(llvm::Type::getFloatTy(context), value.value);
+                } else if constexpr (std::same_as<T, Identifier>) {
+                        if (value.name == "SUCCESS")
+                                return llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0);
+                        if (value.name == "FAILURE")
+                                return llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1);
+                        throw std::logic_error("UNKNOWN IDENTIFIER '" + value.name + "'");
+                } else if constexpr (std::same_as<T, StrLiteral>) {
+                        throw std::logic_error("STR_LITERAL IS CURRENTLY NOT SUPPORTED");
+                } else if constexpr (std::same_as<T, BinaryOp>) {
+                        llvm::Value *left = emitExpr(*value.lvalue, builder);
+                        llvm::Value *right = emitExpr(*value.rvalue, builder);
+                        switch (value.op.type) {
+                                case Operator::Type::ADD: return builder.CreateAdd(left, right);
+                                case Operator::Type::SUB: return builder.CreateSub(left, right);
+                                case Operator::Type::MUL: return builder.CreateMul(left, right);
+                                case Operator::Type::DIV: return builder.CreateSDiv(left, right);
+                                default: throw std::logic_error("UNKNOWN OPERATOR TYPE");
+                        }
+                } else {
+                        throw std::logic_error("UNKNOWN EXPRESSION TYPE");
+                }
+        }, expr);
+}
 
-        if (returnType == llvm::Type::getInt32Ty(context)) {
-                builder.CreateRet(llvm::ConstantInt::get(returnType, std::stoi(resolvedReturn)));
-        }
+void Codegen::emitReturnStatement(const ReturnStatement& statement, llvm::IRBuilder<>& builder) {
+        builder.CreateRet(emitExpr(statement.value, builder));
 }
 
 void Codegen::emitFunctionDef(const FunctionDef& functionDef) {
@@ -35,10 +56,10 @@ void Codegen::emitFunctionDef(const FunctionDef& functionDef) {
 
         // Handle body
         for (const auto& node : functionDef.body) {
-                std::visit([this, &builder, returnType]<typename V>(const V& value) {
+                std::visit([this, &builder]<typename V>(const V& value) {
                         using T = std::decay_t<V>;
                         if constexpr (std::is_same_v<T, ReturnStatement>) {
-                                emitReturnStatement(value, returnType, builder);
+                                emitReturnStatement(value, builder);
                         } else {
                                 throw std::logic_error("UNSUPPORTED NODE IN FUNCTION BODY");
                         }
