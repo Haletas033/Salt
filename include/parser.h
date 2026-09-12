@@ -66,6 +66,14 @@ struct IfStatement {
         std::optional<std::vector<Node>> elseBody;
 };
 
+struct BreakStatement{};
+struct ContinueStatement{};
+
+struct WhileStatement {
+        std::unique_ptr<Expr> condition;
+        std::vector<Node> body;
+};
+
 struct FunctionCall {
         std::string name;
         std::vector<std::unique_ptr<Expr>> args;
@@ -101,7 +109,18 @@ struct FunctionDef {
 struct Node {
         size_t tokenStart;
         size_t tokenEnd;
-        std::variant<Annotation, FunctionDef, VariableDecl, FunctionCall, IfStatement, Assignment, ReturnStatement> value;
+        std::variant<
+                Annotation,
+                FunctionDef,
+                VariableDecl,
+                FunctionCall,
+                IfStatement,
+                BreakStatement,
+                ContinueStatement,
+                WhileStatement,
+                Assignment,
+                ReturnStatement
+        > value;
 };
 
 using Program = std::vector<Node>;
@@ -126,6 +145,8 @@ private:
         VariableDecl parseVariableDecl();
 
         IfStatement parseIfStatement();
+
+        WhileStatement parseWhileStatement();
 
         FunctionCall parseFunctionCall();
 

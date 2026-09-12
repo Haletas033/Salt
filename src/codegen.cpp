@@ -106,32 +106,83 @@ void Codegen::emitStatement(const Node& node, llvm::IRBuilder<>& builder, llvm::
             } else if constexpr (std::is_same_v<T, Assignment>) {
                 emitAssignment(value, builder);
             } else if constexpr (std::is_same_v<T, IfStatement>) {
-                emitIfStatement(value, currentFunction, builder, entryBuilder);
+                emitIfStatement(value, builder, entryBuilder);
+            } else if constexpr (std::is_same_v<T, WhileStatement>) {
+                emitWhileStatement(value, builder, entryBuilder);
+            } else if constexpr (std::is_same_v<T, BreakStatement>) {
+                emitBreakStatement(builder);
+            } else if constexpr (std::is_same_v<T, ContinueStatement>) {
+                emitContinueStatement(builder);
             } else {
                 throw std::logic_error("UNSUPPORTED NODE IN FUNCTION BODY");
             }
         }, node.value);
 }
 
-void Codegen::emitIfStatement(const IfStatement& statement, llvm::Function* function, llvm::IRBuilder<>& builder, llvm::IRBuilder<>& entryBuilder) {
-        llvm::BasicBlock* thenBlock = llvm::BasicBlock::Create(context, "then", function);
-        llvm::BasicBlock* elseBlock = llvm::BasicBlock::Create(context, "else", function);
-        llvm::BasicBlock* mergeBlock = llvm::BasicBlock::Create(context, "merge", function);
+void Codegen::emitIfStatement(const IfStatement& statement, llvm::IRBuilder<>& builder, llvm::IRBuilder<>& entryBuilder) {
+        llvm::BasicBlock* thenBlock = llvm::BasicBlock::Create(context, "if.then", currentFunction);
+        llvm::BasicBlock* elseBlock = llvm::BasicBlock::Create(context, "if.else", currentFunction);
+        llvm::BasicBlock* mergeBlock = llvm::BasicBlock::Create(context, "if.merge", currentFunction);
 
         llvm::Value* cond = emitExpr(*statement.condition, builder);
         builder.CreateCondBr(cond, thenBlock, elseBlock);
 
         builder.SetInsertPoint(thenBlock);
         for (const auto& node : statement.body) { emitStatement(node, builder, entryBuilder); }
-        if (!thenBlock->getTerminator()) builder.CreateBr(mergeBlock);
+        if (!builder.GetInsertBlock()->getTerminator()) builder.CreateBr(mergeBlock);
 
         builder.SetInsertPoint(elseBlock);
         if (statement.elseBody.has_value()) {
                 for (const auto& node : *statement.elseBody) { emitStatement(node, builder, entryBuilder); }
         }
-        if (!elseBlock->getTerminator()) builder.CreateBr(mergeBlock);
+        if (!builder.GetInsertBlock()->getTerminator()) builder.CreateBr(mergeBlock);
 
         builder.SetInsertPoint(mergeBlock);
+}
+
+void Codegen::emitBreakStatement(llvm::IRBuilder<>& builder) {
+        if (!currentLoopExit) throw std::logic_error("BREAK OUTSIDE OF LOOP");
+        builder.CreateBr(currentLoopExit);
+
+        llvm::BasicBlock* deadBlock = llvm::BasicBlock::Create(context, "dead", currentFunction);
+        builder.SetInsertPoint(deadBlock);
+}
+
+void Codegen::emitContinueStatement(llvm::IRBuilder<>& builder) {
+        if (!currentLoopCond) throw std::logic_error("CONTINUE OUTSIDE OF LOOP");
+        builder.CreateBr(currentLoopCond);
+
+        llvm::BasicBlock* deadBlock = llvm::BasicBlock::Create(context, "dead", currentFunction);
+        builder.SetInsertPoint(deadBlock);
+}
+
+void Codegen::emitWhileStatement(const WhileStatement& statement, llvm::IRBuilder<>& builder, llvm::IRBuilder<>& entryBuilder) {
+        llvm::BasicBlock* condBlock = llvm::BasicBlock::Create(context, "while.cond", currentFunction);
+        llvm::BasicBlock* bodyBlock = llvm::BasicBlock::Create(context, "while.body", currentFunction);
+        llvm::BasicBlock* exitBlock = llvm::BasicBlock::Create(context, "while.exit", currentFunction);
+
+        builder.CreateBr(condBlock);
+
+        builder.SetInsertPoint(condBlock);
+        llvm::Value* cond = emitExpr(*statement.condition, builder);
+        builder.CreateCondBr(cond, bodyBlock, exitBlock);
+
+        llvm::BasicBlock* prevLoopExit = currentLoopExit;
+        llvm::BasicBlock* prevLoopCond = currentLoopCond;
+
+        currentLoopExit = exitBlock;
+        currentLoopCond = condBlock;
+
+        builder.SetInsertPoint(bodyBlock);
+        for (const auto& node : statement.body) {
+                emitStatement(node, builder, entryBuilder);
+        }
+        if (!builder.GetInsertBlock()->getTerminator()) builder.CreateBr(condBlock);
+
+        builder.SetInsertPoint(exitBlock);
+
+        currentLoopExit = prevLoopExit;
+        currentLoopCond = prevLoopCond;
 }
 
 llvm::CallInst *Codegen::emitFunctionCall(const FunctionCall& call, llvm::IRBuilder<>& builder) {

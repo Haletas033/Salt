@@ -22,7 +22,12 @@ class Codegen {
 private:
         Program program;
         llvm::LLVMContext context;
+
         llvm::Function* currentFunction = nullptr;
+
+        llvm::BasicBlock* currentLoopExit = nullptr;
+        llvm::BasicBlock* currentLoopCond = nullptr;
+
         std::map<std::string, llvm::AllocaInst*> locals;
 
         llvm::Type *resolveType(const std::string &type);
@@ -37,7 +42,17 @@ private:
 
         void emitStatement(const Node &node, llvm::IRBuilder<> &builder, llvm::IRBuilder<> &entryBuilder);
 
-        void emitIfStatement(const IfStatement &statement, llvm::Function *function, llvm::IRBuilder<> &builder, llvm::IRBuilder<> &entryBuilder);
+        void emitIfStatement(const IfStatement &statement, llvm::IRBuilder<> &builder, llvm::IRBuilder<> &entryBuilder);
+
+        void emitBreakStatement(llvm::IRBuilder<> &builder);
+
+        void emitBreakStatement(llvm::IRBuilder<> &builder) const;
+
+        void emitContinueStatement(llvm::IRBuilder<> &builder) const;
+
+        void emitContinueStatement(llvm::IRBuilder<> &builder);
+
+        void emitWhileStatement(const WhileStatement &statement, llvm::IRBuilder<> &builder, llvm::IRBuilder<> &entryBuilder);
 
         llvm::CallInst *emitFunctionCall(const FunctionCall &call, llvm::IRBuilder<> &builder);
 

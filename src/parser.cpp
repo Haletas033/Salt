@@ -222,6 +222,22 @@ IfStatement Parser::parseIfStatement() {
         return result;
 }
 
+WhileStatement Parser::parseWhileStatement() {
+        WhileStatement result{};
+        ++position;
+        expect(Tokens::L_PARENTHESES);
+        result.condition = std::make_unique<Expr>(parseExpr());
+        expect(Tokens::R_PARENTHESES);
+
+        expect(Tokens::L_BRACE);
+        result.body = std::vector<Node>{};
+        while (peek().tokenType != Tokens::R_BRACE) {
+                result.body.push_back(parseStatement());
+        }
+        expect(Tokens::R_BRACE);
+        return result;
+}
+
 FunctionCall Parser::parseFunctionCall() {
         FunctionCall result{};
         result.name = getTokenStr(expect(Tokens::IDENTIFIER));
@@ -302,6 +318,20 @@ ReturnStatement Parser::parseReturnStatement() {
 Node Parser::parseStatement() {
         const size_t start = position;
 
+        if (peek().tokenType == Tokens::IDENTIFIER && getTokenStr(peek()) == "break") {
+                ++position;
+                auto result = Node{start, position, BreakStatement{}};
+                expect(Tokens::SEMI_COLON);
+                return result;
+        }
+
+        if (peek().tokenType == Tokens::IDENTIFIER && getTokenStr(peek()) == "continue") {
+                ++position;
+                auto result = Node{start, position, ContinueStatement{}};
+                expect(Tokens::SEMI_COLON);
+                return result;
+        }
+
         if (peek().tokenType == Tokens::IDENTIFIER && getTokenStr(peek()) == "return") {
                 return Node{start, position, parseReturnStatement()};
         }
@@ -314,12 +344,16 @@ Node Parser::parseStatement() {
                 return Node{start, position, parseIfStatement()};
         }
 
+        if (peek().tokenType == Tokens::IDENTIFIER && getTokenStr(peek()) == "while") {
+                return Node{start, position, parseWhileStatement()};
+        }
+
         if (peek().tokenType == Tokens::IDENTIFIER && peek(1).tokenType == Tokens::EQUALS) {
                 return Node{start, position, parseAssignment()};
         }
 
         if (peek().tokenType == Tokens::IDENTIFIER && peek(1).tokenType == Tokens::L_PARENTHESES) {
-                return Node{start, position, parseAssignment()};
+                return Node{start, position, parseFunctionCall()};
         }
 
         throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
