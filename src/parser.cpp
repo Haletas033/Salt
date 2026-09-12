@@ -261,6 +261,21 @@ FunctionCall Parser::parseFunctionCall() {
         return result;
 }
 
+ExternC Parser::parseExternC() {
+        ExternC result{};
+        ++position;
+        expect(Tokens::IDENTIFIER);
+        expect(Tokens::L_BRACE);
+        while (peek().tokenType != Tokens::R_BRACE) {
+                result.prototypes.push_back(parsePrototype());
+                if (peek().tokenType == Tokens::R_BRACE) { break; }
+                expect(Tokens::COMMA);
+        }
+        expect(Tokens::R_BRACE);
+        expect(Tokens::SEMI_COLON);
+        return result;
+}
+
 Annotation Parser::parseAnnotation() {
         Annotation result{};
         ++position;
@@ -362,7 +377,9 @@ Node Parser::parseStatement() {
         }
 
         if (peek().tokenType == Tokens::IDENTIFIER && peek(1).tokenType == Tokens::L_PARENTHESES) {
-                return Node{start, position, parseFunctionCall()};
+                FunctionCall call = parseFunctionCall();
+                expect(Tokens::SEMI_COLON);
+                return Node{start, position, std::move(call)};
         }
 
         throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
@@ -379,7 +396,8 @@ FunctionPrototype Parser::parsePrototype() {
                         if (peek().tokenType == Tokens::ELLIPSE) {
                                 result.isVariadic = true;
                                 ++position;
-                                break;
+                                expect(Tokens::R_PARENTHESES);
+                                return result;
                         }
                         std::string type = parseType();
                         if (type == "void" && peek().tokenType == Tokens::R_PARENTHESES) {
@@ -418,6 +436,12 @@ void Parser::run() {
         while (peek().tokenType != Tokens::EOF_TOKEN) {
                 if (peek().tokenType == Tokens::AT_SIGN) {
                         const size_t start = position;
+                        if (getTokenStr(peek(1)) == "externC") {
+                                ExternC externC = parseExternC();
+                                program.push_back({start, position, externC});
+                                continue;
+                        }
+
                         Annotation annotation = parseAnnotation();
                         program.push_back({start, position, annotation});
                         continue;

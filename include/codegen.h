@@ -64,6 +64,8 @@ private:
 
         void emitFunctionDef(const FunctionDef &functionDef);
 
+        void emitExternC(const ExternC &externC);
+
         void run();
 
 public:

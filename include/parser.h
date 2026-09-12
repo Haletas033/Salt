@@ -111,11 +111,16 @@ struct FunctionDef {
         std::vector<Node> body{};
 };
 
+struct ExternC {
+        std::vector<FunctionPrototype> prototypes{};
+};
+
 struct Node {
         size_t tokenStart;
         size_t tokenEnd;
         std::variant<
                 Annotation,
+                ExternC,
                 FunctionDef,
                 VariableDecl,
                 FunctionCall,
@@ -157,7 +162,7 @@ private:
 
         FunctionCall parseFunctionCall();
 
-        Annotation parseExternC();
+        ExternC parseExternC();
 
         Annotation parseAnnotation();
 

@@ -60,7 +60,7 @@ llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
                         }
                         throw std::logic_error("UNKNOWN IDENTIFIER '" + value.name + "'");
                 } else if constexpr (std::same_as<T, StrLiteral>) {
-                        throw std::logic_error("STR_LITERAL IS CURRENTLY NOT SUPPORTED");
+                        return builder.CreateGlobalString(value.value);
                 } else if constexpr (std::same_as<T, BinaryOp>) {
                         llvm::Value *left = emitExpr(*value.lvalue, builder);
                         llvm::Value *right = emitExpr(*value.rvalue, builder);
@@ -142,6 +142,8 @@ void Codegen::emitStatement(const Node& node, llvm::IRBuilder<>& builder, llvm::
                 emitBreakStatement(builder);
             } else if constexpr (std::is_same_v<T, ContinueStatement>) {
                 emitContinueStatement(builder);
+            } else if constexpr (std::is_same_v<T, FunctionCall>) {
+                emitFunctionCall(value, builder);
             } else {
                 throw std::logic_error("UNSUPPORTED NODE IN FUNCTION BODY");
             }
@@ -302,6 +304,12 @@ void Codegen::emitFunctionDef(const FunctionDef& functionDef) {
         }
 }
 
+void Codegen::emitExternC(const ExternC& externC) {
+        for (const auto& proto : externC.prototypes) {
+                emitPrototype(proto);
+        }
+}
+
 void Codegen::run() {
         llvm::InitializeNativeTarget();
         llvm::InitializeNativeTargetAsmPrinter();
@@ -339,9 +347,11 @@ void Codegen::run() {
                         using T = std::decay_t<V>;
                         if constexpr (std::is_same_v<T, Annotation>) {
                                 emitAnnotation(value);
+                        } else if constexpr (std::is_same_v<T, ExternC>) {
+                                emitExternC(value);
                         } else if constexpr (std::is_same_v<T, FunctionDef>) {
                                 emitFunctionDef(value);
-                        } else {
+                        }  else {
                                 throw std::logic_error("UNSUPPORTED NODE TYPE");
                         }
                 }, node.value);

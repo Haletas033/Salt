@@ -181,9 +181,11 @@ void Lexer::run() {
                 }
 
                 if (source[position] == ' ' || source[position] == '\n' || source[position] == '\t' || source[position] == '\r') {
-                        releaseIdentifier(currentIdentifier, currentIdentifierType);
-                        ++position;
-                        continue;
+                        if (currentIdentifierType != IdentifierType::STR && currentIdentifierType != IdentifierType::CHAR) {
+                                releaseIdentifier(currentIdentifier, currentIdentifierType);
+                                ++position;
+                                continue;
+                        }
                 }
 
                 if (currentIdentifier.empty() && currentIdentifierType != IdentifierType::STR && currentIdentifierType != IdentifierType::CHAR) {
