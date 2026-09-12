@@ -7,6 +7,7 @@
 
 #include "lexer.h"
 
+struct FunctionCall;
 struct BinaryOp;
 struct Node;
 
@@ -37,7 +38,7 @@ struct Operator {
         int precedence{};
 };
 
-using Expr = std::variant<IntLiteral, FloatLiteral, StrLiteral, Identifier, BinaryOp>;
+using Expr = std::variant<IntLiteral, FloatLiteral, StrLiteral, Identifier, BinaryOp, FunctionCall>;
 struct BinaryOp {
         std::unique_ptr<Expr> lvalue{};
         std::unique_ptr<Expr> rvalue{};
@@ -53,6 +54,11 @@ struct VariableDecl {
         std::string type;
         std::string name;
         std::optional<std::unique_ptr<Expr>> value;
+};
+
+struct FunctionCall {
+        std::string name;
+        std::vector<std::unique_ptr<Expr>> args;
 };
 
 struct AnnotationArg {
@@ -85,7 +91,7 @@ struct FunctionDef {
 struct Node {
         size_t tokenStart;
         size_t tokenEnd;
-        std::variant<Annotation, FunctionDef, VariableDecl, Assignment, ReturnStatement> value;
+        std::variant<Annotation, FunctionDef, VariableDecl, FunctionCall, Assignment, ReturnStatement> value;
 };
 
 using Program = std::vector<Node>;
@@ -108,6 +114,8 @@ private:
         Assignment parseAssignment();
 
         VariableDecl parseVariableDecl();
+
+        FunctionCall parseFunctionCall();
 
         Annotation parseAnnotation();
 

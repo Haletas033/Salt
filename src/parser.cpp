@@ -94,6 +94,10 @@ Expr Parser::parsePrimary() {
                 }
 
                 case Tokens::IDENTIFIER:
+                        if (peek(1).tokenType == Tokens::L_PARENTHESES) {
+                                return parseFunctionCall();
+                        }
+
                         result = Identifier{std::string{getTokenStr(peek())}};
                         ++position;
                         return result;
@@ -148,6 +152,20 @@ VariableDecl Parser::parseVariableDecl() {
         }
 
         throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
+}
+
+FunctionCall Parser::parseFunctionCall() {
+        FunctionCall result{};
+        result.name = getTokenStr(expect(Tokens::IDENTIFIER));
+        expect(Tokens::L_PARENTHESES);
+
+        while (peek().tokenType != Tokens::R_PARENTHESES) {
+                result.args.push_back(std::make_unique<Expr>(parseExpr()));
+                if (peek().tokenType == Tokens::R_PARENTHESES) break;
+                expect(Tokens::COMMA);
+        }
+        ++position;
+        return result;
 }
 
 Annotation Parser::parseAnnotation() {
@@ -225,6 +243,10 @@ Node Parser::parseStatement() {
         }
 
         if (peek().tokenType == Tokens::IDENTIFIER && peek(1).tokenType == Tokens::EQUALS) {
+                return Node{start, position, parseAssignment()};
+        }
+
+        if (peek().tokenType == Tokens::IDENTIFIER && peek(1).tokenType == Tokens::L_PARENTHESES) {
                 return Node{start, position, parseAssignment()};
         }
 

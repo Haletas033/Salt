@@ -45,6 +45,8 @@ llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
                                 case Operator::Type::OR:  return builder.CreateOr(left, right);
                                 default: throw std::logic_error("UNKNOWN OPERATOR TYPE");
                         }
+                } else if (std::same_as<T, FunctionCall>) {
+                        return emitFunctionCall(value, builder);
                 } else {
                         throw std::logic_error("UNKNOWN EXPRESSION TYPE");
                 }
@@ -73,6 +75,16 @@ void Codegen::emitVariableDecl(const VariableDecl& decl, llvm::IRBuilder<>& entr
         locals[decl.name] = alloca;
 }
 
+llvm::CallInst *Codegen::emitFunctionCall(const FunctionCall &call, llvm::IRBuilder<> &builder) {
+        llvm::Function* callee = module.getFunction(call.name);
+        if (!callee) throw std::logic_error("UNDEFINED FUNCTION '" + call.name + "'");
+
+        std::vector<llvm::Value*> argValues;
+        for (const auto& arg : call.args) {
+                argValues.push_back(emitExpr(*arg, builder));
+        }
+        return builder.CreateCall(callee, argValues);
+}
 
 void Codegen::emitReturnStatement(const ReturnStatement& statement, llvm::IRBuilder<>& builder) {
         builder.CreateRet(emitExpr(statement.value, builder));
@@ -185,7 +197,7 @@ void Codegen::run() {
 
         llvm::ModulePassManager mpm = passBuilder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
         mpm.run(module, mam);
-        
+
         std::error_code ec;
         llvm::raw_fd_ostream output("output.o", ec);
         llvm::legacy::PassManager pass;

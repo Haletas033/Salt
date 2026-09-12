@@ -34,6 +34,8 @@ private:
 
         void emitVariableDecl(const VariableDecl &decl, llvm::IRBuilder<> &entryBuilder, llvm::IRBuilder<> &builder);
 
+        llvm::CallInst *emitFunctionCall(const FunctionCall &call, llvm::IRBuilder<> &builder);
+
         void emitReturnStatement(const ReturnStatement &statement, llvm::IRBuilder<> &builder);
 
         void emitFunctionDef(const FunctionDef &functionDef);
