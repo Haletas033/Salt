@@ -171,6 +171,21 @@ void Codegen::run() {
                 }, node.value);
         }
 
+        llvm::PassBuilder passBuilder;
+        llvm::LoopAnalysisManager lam;
+        llvm::FunctionAnalysisManager fam;
+        llvm::CGSCCAnalysisManager cgam;
+        llvm::ModuleAnalysisManager mam;
+
+        passBuilder.registerModuleAnalyses(mam);
+        passBuilder.registerCGSCCAnalyses(cgam);
+        passBuilder.registerFunctionAnalyses(fam);
+        passBuilder.registerLoopAnalyses(lam);
+        passBuilder.crossRegisterProxies(lam, fam, cgam, mam);
+
+        llvm::ModulePassManager mpm = passBuilder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
+        mpm.run(module, mam);
+        
         std::error_code ec;
         llvm::raw_fd_ostream output("output.o", ec);
         llvm::legacy::PassManager pass;

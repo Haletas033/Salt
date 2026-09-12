@@ -14,6 +14,7 @@
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/Passes/PassBuilder.h>
 
 #include "parser.h"
 
