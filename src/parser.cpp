@@ -23,6 +23,15 @@ Token Parser::expect(const Tokens tokenType) {
         throw std::logic_error(errorMessage);
 }
 
+std::string Parser::parseType() {
+        auto type = std::string(getTokenStr(expect(Tokens::IDENTIFIER)));
+        while (peek().tokenType == Tokens::STAR) {
+                type += '*';
+                ++position;
+        }
+        return type;
+}
+
 std::optional<Operator> Parser::getOperator() const {
         Operator result{};
         switch (peek().tokenType) {
@@ -167,7 +176,7 @@ Assignment Parser::parseAssignment() {
 VariableDecl Parser::parseVariableDecl() {
         VariableDecl result{};
         ++position;
-        result.type = getTokenStr(expect(Tokens::IDENTIFIER));
+        result.type = parseType();
         result.name = getTokenStr(expect(Tokens::IDENTIFIER));
 
         if (peek().tokenType == Tokens::SEMI_COLON) {
@@ -363,29 +372,24 @@ FunctionDef Parser::parseFunctionDef() {
         FunctionDef result{};
         ++position;
         // TODO(parser) Skip any tokens before the type
-        // TODO(parser) Handle types like i32*
-        result.returnType = getTokenStr(expect(Tokens::IDENTIFIER));
+        result.returnType = parseType();
         result.name = getTokenStr(expect(Tokens::IDENTIFIER));
         expect(Tokens::L_PARENTHESES);
 
         // Handle args
         if (peek().tokenType != Tokens::R_PARENTHESES) {
-                if (const auto& token = getTokenStr(peek()); token != "void") {
-                        while (true) {
-                                Parameter param{};
-                                param.type = getTokenStr(expect(Tokens::IDENTIFIER));
-                                param.name = getTokenStr(expect(Tokens::IDENTIFIER));
-                                result.parameters.push_back(param);
-                                if (peek().tokenType == Tokens::R_PARENTHESES) {
-                                        ++position;
-                                        break;
-                                }
-                                expect(Tokens::COMMA);
+                while (true) {
+                        std::string type = parseType();
+                        if (type == "void" && peek().tokenType == Tokens::R_PARENTHESES) {
+                                ++position;
+                                break;
                         }
-                } else {
-                        result.parameters.push_back({"void", ""});
-                        ++position;
-                        expect(Tokens::R_PARENTHESES);
+                        Parameter param{};
+                        param.type = type;
+                        param.name = std::string(getTokenStr(expect(Tokens::IDENTIFIER)));
+                        result.parameters.push_back(param);
+                        if (peek().tokenType == Tokens::R_PARENTHESES) { ++position; break; }
+                        expect(Tokens::COMMA);
                 }
         } else { ++position; }
         expect(Tokens::L_BRACE);

@@ -1,12 +1,38 @@
 #include <codegen.h>
 
 llvm::Type* Codegen::resolveType(const std::string& type) {
-        if (type == "i32") return llvm::Type::getInt32Ty(context);
-        if (type == "i64") return llvm::Type::getInt64Ty(context);
-        if (type == "f32") return llvm::Type::getFloatTy(context);
-        if (type == "f64") return llvm::Type::getDoubleTy(context);
-        if (type == "void") return llvm::Type::getVoidTy(context);
+        if (type.ends_with('*')) {
+                return llvm::PointerType::get(context, 0);
+        }
+
+        if (type == "u8"  || type == "i8")  return llvm::Type::getInt8Ty(context);
+        if (type == "u16" || type == "i16") return llvm::Type::getInt16Ty(context);
+        if (type == "u32" || type == "i32") return llvm::Type::getInt32Ty(context);
+        if (type == "u64" || type == "i64") return llvm::Type::getInt64Ty(context);
+        if (type == "f32")                  return llvm::Type::getFloatTy(context);
+        if (type == "f64")                  return llvm::Type::getDoubleTy(context);
+        if (type == "bool")                 return llvm::Type::getInt8Ty(context);
+        if (type == "void")                 return llvm::Type::getVoidTy(context);
         throw std::logic_error("UNKNOWN TYPE '" + type + "'");
+}
+
+llvm::Value* Codegen::castTo(llvm::Value* value, llvm::Type* targetType, llvm::IRBuilder<>& builder) {
+        if (value->getType() == targetType) return value;
+
+        if (value->getType()->isIntegerTy() && targetType->isIntegerTy()) {
+                return builder.CreateIntCast(value, targetType, true);
+        }
+        if (value->getType()->isFloatingPointTy() && targetType->isFloatingPointTy()) {
+                return builder.CreateFPCast(value, targetType);
+        }
+        if (value->getType()->isIntegerTy() && targetType->isFloatingPointTy()) {
+                return builder.CreateSIToFP(value, targetType);
+        }
+        if (value->getType()->isFloatingPointTy() && targetType->isIntegerTy()) {
+                return builder.CreateFPToSI(value, targetType);
+        }
+
+        throw std::logic_error("INCOMPATIBLE TYPES IN CAST");
 }
 
 void Codegen::emitAnnotation(const Annotation& annotation) {
@@ -78,6 +104,7 @@ void Codegen::emitAssignment(const Assignment& assign, llvm::IRBuilder<>& builde
         const auto it = locals.find(assign.name);
         if (it == locals.end()) throw std::logic_error("UNDEFINED IDENTIFIER '" + assign.name + "'");
         llvm::Value* val = emitExpr(*assign.value, builder);
+        val = castTo(val, it->second->getAllocatedType(), builder);
         builder.CreateStore(val, it->second);
 }
 
@@ -86,10 +113,12 @@ void Codegen::emitVariableDecl(const VariableDecl& decl, llvm::IRBuilder<>& entr
                 throw std::logic_error("REDEFINITION OF VARIABLE \'" + decl.name + "\'");
         }
 
+        llvm::Type* targetType = resolveType(decl.type);
         llvm::AllocaInst* alloca = entryBuilder.CreateAlloca(resolveType(decl.type), nullptr, decl.name);
 
         if (decl.value.has_value()) {
                 llvm::Value* value = emitExpr(*decl.value.value(), builder);
+                value = castTo(value, targetType, builder);
                 builder.CreateStore(value, alloca);
         }
 
@@ -190,14 +219,30 @@ llvm::CallInst *Codegen::emitFunctionCall(const FunctionCall& call, llvm::IRBuil
         if (!callee) throw std::logic_error("UNDEFINED FUNCTION '" + call.name + "'");
 
         std::vector<llvm::Value*> argValues;
+
+        size_t i = 0;
         for (const auto& arg : call.args) {
-                argValues.push_back(emitExpr(*arg, builder));
+                llvm::Value* value = emitExpr(*arg, builder);
+
+                if (i < callee->getFunctionType()->getNumParams()) {
+                        llvm::Type* expectedType = callee->getFunctionType()->getParamType(i);
+                        value = castTo(value, expectedType, builder);
+                }
+
+                argValues.push_back(value);
+                ++i;
         }
         return builder.CreateCall(callee, argValues);
 }
 
 void Codegen::emitReturnStatement(const ReturnStatement& statement, llvm::IRBuilder<>& builder) {
-        builder.CreateRet(emitExpr(statement.value, builder));
+        if (currentFunction->getReturnType()->isVoidTy()) {
+                builder.CreateRetVoid();
+                return;
+        }
+        llvm::Value* val = emitExpr(statement.value, builder);
+        val = castTo(val, currentFunction->getReturnType(), builder);
+        builder.CreateRet(val);
 }
 
 void Codegen::emitFunctionDef(const FunctionDef& functionDef) {
@@ -235,6 +280,12 @@ void Codegen::emitFunctionDef(const FunctionDef& functionDef) {
         // Handle body
         for (const auto& node : functionDef.body) {
                 emitStatement(node, builder, entryBuilder);
+        }
+
+        if (!builder.GetInsertBlock()->getTerminator()) {
+                if (currentFunction->getReturnType()->isVoidTy()) {
+                        builder.CreateRetVoid();
+                }
         }
 }
 

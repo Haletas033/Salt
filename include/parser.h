@@ -134,6 +134,8 @@ private:
         [[nodiscard]] Token peek(size_t offset) const;
         Token expect(Tokens tokenType);
 
+        std::string parseType();
+
         [[nodiscard]] std::optional<Operator> getOperator() const;
 
         Expr parsePrimary();

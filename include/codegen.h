@@ -32,6 +32,8 @@ private:
 
         llvm::Type *resolveType(const std::string &type);
 
+        static llvm::Value *castTo(llvm::Value *value, llvm::Type *targetType, llvm::IRBuilder<> &builder);
+
         void emitAnnotation(const Annotation &annotation);
 
         llvm::Value *emitExpr(const Expr &expr, llvm::IRBuilder<> &builder);
