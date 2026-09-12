@@ -59,7 +59,6 @@ constexpr TokenDef token_defs[] = {
         {"|", Tokens::OR},
         {"||", Tokens::OR_LOGICAL},
         {"^", Tokens::XOR},
-        {"^^", Tokens::XOR_LOGICAL},
 
         {"!",  Tokens::NOT},
         {"!=", Tokens::NOT_EQUAL},

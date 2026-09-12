@@ -22,6 +22,7 @@ class Codegen {
 private:
         Program program;
         llvm::LLVMContext context;
+        llvm::Function* currentFunction = nullptr;
         std::map<std::string, llvm::AllocaInst*> locals;
 
         llvm::Type *resolveType(const std::string &type);
@@ -33,6 +34,10 @@ private:
         void emitAssignment(const Assignment &assign, llvm::IRBuilder<> &builder);
 
         void emitVariableDecl(const VariableDecl &decl, llvm::IRBuilder<> &entryBuilder, llvm::IRBuilder<> &builder);
+
+        void emitStatement(const Node &node, llvm::IRBuilder<> &builder, llvm::IRBuilder<> &entryBuilder);
+
+        void emitIfStatement(const IfStatement &statement, llvm::Function *function, llvm::IRBuilder<> &builder, llvm::IRBuilder<> &entryBuilder);
 
         llvm::CallInst *emitFunctionCall(const FunctionCall &call, llvm::IRBuilder<> &builder);
 

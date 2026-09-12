@@ -21,6 +21,10 @@ llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
                 } else if constexpr (std::same_as<T, FloatLiteral>) {
                         return llvm::ConstantFP::get(llvm::Type::getFloatTy(context), value.value);
                 } else if constexpr (std::same_as<T, Identifier>) {
+                        if (value.name == "true")
+                                return llvm::ConstantInt::get(llvm::Type::getInt1Ty(context), 1);
+                        if (value.name == "false")
+                                return llvm::ConstantInt::get(llvm::Type::getInt1Ty(context), 0);
                         if (value.name == "SUCCESS")
                                 return llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0);
                         if (value.name == "FAILURE")
@@ -43,9 +47,26 @@ llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
                                 case Operator::Type::AND: return builder.CreateAnd(left, right);
                                 case Operator::Type::XOR: return builder.CreateXor(left, right);
                                 case Operator::Type::OR:  return builder.CreateOr(left, right);
+                                case Operator::Type::EQ:  return builder.CreateICmp(llvm::CmpInst::ICMP_EQ,  left, right);
+                                case Operator::Type::NEQ: return builder.CreateICmp(llvm::CmpInst::ICMP_NE,  left, right);
+                                case Operator::Type::LT:  return builder.CreateICmp(llvm::CmpInst::ICMP_SLT, left, right);
+                                case Operator::Type::GT:  return builder.CreateICmp(llvm::CmpInst::ICMP_SGT, left, right);
+                                case Operator::Type::LTE: return builder.CreateICmp(llvm::CmpInst::ICMP_SLE, left, right);
+                                case Operator::Type::GTE: return builder.CreateICmp(llvm::CmpInst::ICMP_SGE, left, right);
+                                case Operator::Type::LOGICAL_AND: {
+                                        llvm::Value* leftBool = builder.CreateICmpNE(left, llvm::ConstantInt::get(left->getType(), 0));
+                                        llvm::Value* rightBool = builder.CreateICmpNE(right, llvm::ConstantInt::get(right->getType(), 0));
+                                        return builder.CreateAnd(leftBool, rightBool);
+                                }
+                                case Operator::Type::LOGICAL_OR: {
+                                        llvm::Value* leftBool = builder.CreateICmpNE(left, llvm::ConstantInt::get(left->getType(), 0));
+                                        llvm::Value* rightBool = builder.CreateICmpNE(right, llvm::ConstantInt::get(right->getType(), 0));
+                                        return builder.CreateOr(leftBool, rightBool);
+                                }
+
                                 default: throw std::logic_error("UNKNOWN OPERATOR TYPE");
                         }
-                } else if (std::same_as<T, FunctionCall>) {
+                } else if constexpr (std::same_as<T, FunctionCall>) {
                         return emitFunctionCall(value, builder);
                 } else {
                         throw std::logic_error("UNKNOWN EXPRESSION TYPE");
@@ -75,7 +96,45 @@ void Codegen::emitVariableDecl(const VariableDecl& decl, llvm::IRBuilder<>& entr
         locals[decl.name] = alloca;
 }
 
-llvm::CallInst *Codegen::emitFunctionCall(const FunctionCall &call, llvm::IRBuilder<> &builder) {
+void Codegen::emitStatement(const Node& node, llvm::IRBuilder<>& builder, llvm::IRBuilder<>& entryBuilder) {
+        std::visit([this, &builder, &entryBuilder]<typename V>(const V& value) {
+            using T = std::decay_t<V>;
+            if constexpr (std::is_same_v<T, ReturnStatement>) {
+                emitReturnStatement(value, builder);
+            } else if constexpr (std::is_same_v<T, VariableDecl>) {
+                emitVariableDecl(value, entryBuilder, builder);
+            } else if constexpr (std::is_same_v<T, Assignment>) {
+                emitAssignment(value, builder);
+            } else if constexpr (std::is_same_v<T, IfStatement>) {
+                emitIfStatement(value, currentFunction, builder, entryBuilder);
+            } else {
+                throw std::logic_error("UNSUPPORTED NODE IN FUNCTION BODY");
+            }
+        }, node.value);
+}
+
+void Codegen::emitIfStatement(const IfStatement& statement, llvm::Function* function, llvm::IRBuilder<>& builder, llvm::IRBuilder<>& entryBuilder) {
+        llvm::BasicBlock* thenBlock = llvm::BasicBlock::Create(context, "then", function);
+        llvm::BasicBlock* elseBlock = llvm::BasicBlock::Create(context, "else", function);
+        llvm::BasicBlock* mergeBlock = llvm::BasicBlock::Create(context, "merge", function);
+
+        llvm::Value* cond = emitExpr(*statement.condition, builder);
+        builder.CreateCondBr(cond, thenBlock, elseBlock);
+
+        builder.SetInsertPoint(thenBlock);
+        for (const auto& node : statement.body) { emitStatement(node, builder, entryBuilder); }
+        if (!thenBlock->getTerminator()) builder.CreateBr(mergeBlock);
+
+        builder.SetInsertPoint(elseBlock);
+        if (statement.elseBody.has_value()) {
+                for (const auto& node : *statement.elseBody) { emitStatement(node, builder, entryBuilder); }
+        }
+        if (!elseBlock->getTerminator()) builder.CreateBr(mergeBlock);
+
+        builder.SetInsertPoint(mergeBlock);
+}
+
+llvm::CallInst *Codegen::emitFunctionCall(const FunctionCall& call, llvm::IRBuilder<>& builder) {
         llvm::Function* callee = module.getFunction(call.name);
         if (!callee) throw std::logic_error("UNDEFINED FUNCTION '" + call.name + "'");
 
@@ -105,6 +164,7 @@ void Codegen::emitFunctionDef(const FunctionDef& functionDef) {
         llvm::FunctionType* funcType = llvm::FunctionType::get(returnType, paramTypes, false);
 
         llvm::Function* function = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, functionDef.name, module);
+        currentFunction = function;
 
         llvm::BasicBlock* entryBlock = llvm::BasicBlock::Create(context, "entry", function);
         llvm::IRBuilder entryBuilder(entryBlock);
@@ -123,18 +183,7 @@ void Codegen::emitFunctionDef(const FunctionDef& functionDef) {
 
         // Handle body
         for (const auto& node : functionDef.body) {
-                std::visit([this, &builder, &entryBuilder]<typename V>(const V& value) {
-                        using T = std::decay_t<V>;
-                        if constexpr (std::is_same_v<T, ReturnStatement>) {
-                                emitReturnStatement(value, builder);
-                        } else if constexpr(std::is_same_v<T, VariableDecl>) {
-                                emitVariableDecl(value, entryBuilder, builder);
-                        } else if constexpr (std::is_same_v<T, Assignment>) {
-                                emitAssignment(value, builder);
-                        } else {
-                                throw std::logic_error("UNSUPPORTED NODE IN FUNCTION BODY");
-                        }
-                }, node.value);
+                emitStatement(node, builder, entryBuilder);
         }
 }
 

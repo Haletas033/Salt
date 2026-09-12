@@ -27,35 +27,67 @@ std::optional<Operator> Parser::getOperator() const {
         Operator result{};
         switch (peek().tokenType) {
                 case Tokens::PLUS:
-                        result = {Operator::Type::ADD, 5};
+                        result = {Operator::Type::ADD, 7};
                         break;
 
                 case Tokens::SUB:
-                        result = {Operator::Type::SUB, 5};
+                        result = {Operator::Type::SUB, 7};
                         break;
 
                 case Tokens::STAR:
-                        result = {Operator::Type::MUL, 6};
+                        result = {Operator::Type::MUL, 8};
                         break;
 
                 case Tokens::DIV:
-                        result = {Operator::Type::DIV, 6};
+                        result = {Operator::Type::DIV, 8};
                         break;
 
                 case Tokens::PERCENT:
-                        result = {Operator::Type::MOD, 6};
+                        result = {Operator::Type::MOD, 8};
                         break;
 
                 case Tokens::AND:
-                        result = {Operator::Type::AND, 4};
+                        result = {Operator::Type::AND, 6};
                         break;
 
                 case Tokens::XOR:
-                        result = {Operator::Type::XOR, 3};
+                        result = {Operator::Type::XOR, 6};
                         break;
 
                 case Tokens::OR:
-                        result = {Operator::Type::OR, 2};
+                        result = {Operator::Type::OR, 5};
+                        break;
+
+                case Tokens::EQUALS_LOGICAL:
+                        result = {Operator::Type::EQ, 4};
+                        break;
+
+                case Tokens::NOT_EQUAL:
+                        result = {Operator::Type::NEQ, 4};
+                        break;
+
+                case Tokens::L_ANGULAR:
+                        result = {Operator::Type::LT, 4};
+                        break;
+
+                case Tokens::R_ANGULAR:
+                        result = {Operator::Type::GT, 4};
+                        break;
+
+                case Tokens::LESS_THAN:
+                        result = {Operator::Type::LTE, 4};
+                        break;
+
+                case Tokens::GREATER_THAN:
+                        result = {Operator::Type::GTE, 4};
+                        break;
+
+                case Tokens::AND_LOGICAL:
+                        result = {Operator::Type::LOGICAL_AND, 2};
+                        break;
+
+                case Tokens::OR_LOGICAL:
+                        result = {Operator::Type::LOGICAL_OR, 1};
                         break;
 
                 default:
@@ -154,6 +186,42 @@ VariableDecl Parser::parseVariableDecl() {
         throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
 }
 
+IfStatement Parser::parseIfStatement() {
+        IfStatement result{};
+        ++position;
+        expect(Tokens::L_PARENTHESES);
+        result.condition = std::make_unique<Expr>(parseExpr());
+        expect(Tokens::R_PARENTHESES);
+        expect(Tokens::L_BRACE);
+
+        // Handle body
+        while (peek().tokenType != Tokens::R_BRACE) {
+                result.body.push_back(parseStatement());
+        }
+
+        expect(Tokens::R_BRACE);
+
+        // Handle else / else if
+        if (peek().tokenType == Tokens::IDENTIFIER && getTokenStr(peek()) == "else") {
+                ++position;
+
+                if (peek().tokenType == Tokens::IDENTIFIER && getTokenStr(peek()) == "if") {
+                        IfStatement elseIf = parseIfStatement();
+                        result.elseBody = std::vector<Node>{};
+                        result.elseBody->push_back(Node{position, position, std::move(elseIf)});
+                } else {
+                        expect(Tokens::L_BRACE);
+                        result.elseBody = std::vector<Node>{};
+                        while (peek().tokenType != Tokens::R_BRACE) {
+                                result.elseBody->push_back(parseStatement());
+                        }
+                        expect(Tokens::R_BRACE);
+                }
+        }
+
+        return result;
+}
+
 FunctionCall Parser::parseFunctionCall() {
         FunctionCall result{};
         result.name = getTokenStr(expect(Tokens::IDENTIFIER));
@@ -240,6 +308,10 @@ Node Parser::parseStatement() {
 
         if (peek().tokenType == Tokens::PERCENT) {
                 return Node{start, position, parseVariableDecl()};
+        }
+
+        if (peek().tokenType == Tokens::IDENTIFIER && getTokenStr(peek()) == "if") {
+                return Node{start, position, parseIfStatement()};
         }
 
         if (peek().tokenType == Tokens::IDENTIFIER && peek(1).tokenType == Tokens::EQUALS) {

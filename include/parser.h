@@ -32,7 +32,11 @@ struct Operator {
                 ADD, SUB,
                 MUL, DIV,
                 MOD, AND,
-                XOR, OR
+                XOR, OR,
+                EQ, NEQ,
+                LT, GT,
+                LTE, GTE,
+                LOGICAL_AND, LOGICAL_OR
         };
         Type type{};
         int precedence{};
@@ -54,6 +58,12 @@ struct VariableDecl {
         std::string type;
         std::string name;
         std::optional<std::unique_ptr<Expr>> value;
+};
+
+struct IfStatement {
+        std::unique_ptr<Expr> condition;
+        std::vector<Node> body;
+        std::optional<std::vector<Node>> elseBody;
 };
 
 struct FunctionCall {
@@ -91,7 +101,7 @@ struct FunctionDef {
 struct Node {
         size_t tokenStart;
         size_t tokenEnd;
-        std::variant<Annotation, FunctionDef, VariableDecl, FunctionCall, Assignment, ReturnStatement> value;
+        std::variant<Annotation, FunctionDef, VariableDecl, FunctionCall, IfStatement, Assignment, ReturnStatement> value;
 };
 
 using Program = std::vector<Node>;
@@ -114,6 +124,8 @@ private:
         Assignment parseAssignment();
 
         VariableDecl parseVariableDecl();
+
+        IfStatement parseIfStatement();
 
         FunctionCall parseFunctionCall();
 
