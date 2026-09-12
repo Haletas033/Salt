@@ -42,6 +42,22 @@ std::optional<Operator> Parser::getOperator() const {
                         result = {Operator::Type::DIV, 6};
                         break;
 
+                case Tokens::PERCENT:
+                        result = {Operator::Type::MOD, 6};
+                        break;
+
+                case Tokens::AND:
+                        result = {Operator::Type::AND, 4};
+                        break;
+
+                case Tokens::XOR:
+                        result = {Operator::Type::XOR, 3};
+                        break;
+
+                case Tokens::OR:
+                        result = {Operator::Type::OR, 2};
+                        break;
+
                 default:
                         return std::nullopt;
         }

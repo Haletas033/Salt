@@ -29,7 +29,9 @@ struct Identifier {
 struct Operator {
         enum class Type {
                 ADD, SUB,
-                MUL, DIV
+                MUL, DIV,
+                MOD, AND,
+                XOR, OR
         };
         Type type{};
         int precedence{};

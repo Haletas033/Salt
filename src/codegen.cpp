@@ -27,6 +27,10 @@ llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
                                 case Operator::Type::SUB: return builder.CreateSub(left, right);
                                 case Operator::Type::MUL: return builder.CreateMul(left, right);
                                 case Operator::Type::DIV: return builder.CreateSDiv(left, right);
+                                case Operator::Type::MOD: return builder.CreateSRem(left, right);
+                                case Operator::Type::AND: return builder.CreateAnd(left, right);
+                                case Operator::Type::XOR: return builder.CreateXor(left, right);
+                                case Operator::Type::OR:  return builder.CreateOr(left, right);
                                 default: throw std::logic_error("UNKNOWN OPERATOR TYPE");
                         }
                 } else {
