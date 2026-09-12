@@ -60,6 +60,8 @@ private:
 
         void emitReturnStatement(const ReturnStatement &statement, llvm::IRBuilder<> &builder);
 
+        llvm::Function *emitPrototype(const FunctionPrototype &prototype);
+
         void emitFunctionDef(const FunctionDef &functionDef);
 
         void run();

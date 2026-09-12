@@ -245,21 +245,34 @@ void Codegen::emitReturnStatement(const ReturnStatement& statement, llvm::IRBuil
         builder.CreateRet(val);
 }
 
-void Codegen::emitFunctionDef(const FunctionDef& functionDef) {
-        locals.clear();
-
-        llvm::Type* returnType = nullptr;
-        returnType = resolveType(functionDef.returnType);
+llvm::Function* Codegen::emitPrototype(const FunctionPrototype& prototype) {
+        if (llvm::Function* existing = module.getFunction(prototype.name)) {
+                return existing;
+        }
 
         std::vector<llvm::Type*> paramTypes;
-        for (const auto&[type, name] : functionDef.parameters) {
+        for (const auto&[type, name] : prototype.params) {
                 if (type == "void") continue;
                 paramTypes.push_back(resolveType(type));
         }
+        llvm::FunctionType* funcType = llvm::FunctionType::get(
+            resolveType(prototype.returnType), paramTypes, prototype.isVariadic
+        );
+        return llvm::Function::Create(
+            funcType, llvm::Function::ExternalLinkage, prototype.name, module
+        );
+}
 
-        llvm::FunctionType* funcType = llvm::FunctionType::get(returnType, paramTypes, false);
+void Codegen::emitFunctionDef(const FunctionDef& functionDef) {
+        if (functionDef.body.empty()) {
+                emitPrototype(functionDef.prototype);
+                return;
+        }
 
-        llvm::Function* function = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, functionDef.name, module);
+        locals.clear();
+
+        llvm::Function* function = emitPrototype(functionDef.prototype);
+
         currentFunction = function;
 
         llvm::BasicBlock* entryBlock = llvm::BasicBlock::Create(context, "entry", function);
@@ -270,7 +283,7 @@ void Codegen::emitFunctionDef(const FunctionDef& functionDef) {
         // Handle args
         size_t i = 0;
         for (auto& arg : function->args()) {
-                arg.setName(functionDef.parameters[i].name);
+                arg.setName(functionDef.prototype.params[i].name);
                 llvm::AllocaInst* alloca = entryBuilder.CreateAlloca(arg.getType(), nullptr, arg.getName());
                 entryBuilder.CreateStore(&arg, alloca);
                 locals[std::string(arg.getName())] = alloca;

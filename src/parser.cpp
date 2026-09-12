@@ -368,17 +368,19 @@ Node Parser::parseStatement() {
         throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
 }
 
-FunctionDef Parser::parseFunctionDef() {
-        FunctionDef result{};
-        ++position;
-        // TODO(parser) Skip any tokens before the type
+FunctionPrototype Parser::parsePrototype() {
+        FunctionPrototype result{};
         result.returnType = parseType();
-        result.name = getTokenStr(expect(Tokens::IDENTIFIER));
+        result.name = std::string(getTokenStr(expect(Tokens::IDENTIFIER)));
         expect(Tokens::L_PARENTHESES);
 
-        // Handle args
         if (peek().tokenType != Tokens::R_PARENTHESES) {
                 while (true) {
+                        if (peek().tokenType == Tokens::ELLIPSE) {
+                                result.isVariadic = true;
+                                ++position;
+                                break;
+                        }
                         std::string type = parseType();
                         if (type == "void" && peek().tokenType == Tokens::R_PARENTHESES) {
                                 ++position;
@@ -387,20 +389,28 @@ FunctionDef Parser::parseFunctionDef() {
                         Parameter param{};
                         param.type = type;
                         param.name = std::string(getTokenStr(expect(Tokens::IDENTIFIER)));
-                        result.parameters.push_back(param);
+                        result.params.push_back(param);
                         if (peek().tokenType == Tokens::R_PARENTHESES) { ++position; break; }
                         expect(Tokens::COMMA);
                 }
         } else { ++position; }
-        expect(Tokens::L_BRACE);
 
-        // Handle body
+        return result;
+}
+
+FunctionDef Parser::parseFunctionDef() {
+        FunctionDef result{};
+        ++position;
+        result.prototype = parsePrototype();
+        if (peek().tokenType == Tokens::SEMI_COLON) {
+                ++position;
+                return result;
+        }
+        expect(Tokens::L_BRACE);
         while (peek().tokenType != Tokens::R_BRACE) {
                 result.body.push_back(parseStatement());
         }
-
         expect(Tokens::R_BRACE);
-
         return result;
 }
 

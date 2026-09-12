@@ -99,10 +99,15 @@ struct Parameter {
         std::string name;
 };
 
+struct FunctionPrototype {
+        std::string returnType;
+        std::string name;
+        std::vector<Parameter> params;
+        bool isVariadic = false;
+};
+
 struct FunctionDef {
-        std::string returnType{};
-        std::string name{};
-        std::vector<Parameter> parameters{};
+        FunctionPrototype prototype{};
         std::vector<Node> body{};
 };
 
@@ -152,11 +157,15 @@ private:
 
         FunctionCall parseFunctionCall();
 
+        Annotation parseExternC();
+
         Annotation parseAnnotation();
 
         ReturnStatement parseReturnStatement();
 
         Node parseStatement();
+
+        FunctionPrototype parsePrototype();
 
         FunctionDef parseFunctionDef();
 
