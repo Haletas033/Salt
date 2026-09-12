@@ -67,6 +67,13 @@ std::optional<Operator> Parser::getOperator() const {
 Expr Parser::parsePrimary() {
         Expr result{};
         switch (peek().tokenType) {
+                case Tokens::L_PARENTHESES: {
+                        ++position;
+                        result = parseExpr();
+                        expect(Tokens::R_PARENTHESES);
+                        return result;
+                }
+
                 case Tokens::INT_LITERAL: {
                         result = IntLiteral{std::stoi(std::string{getTokenStr(peek())})};
                         ++position;
@@ -95,7 +102,7 @@ Expr Parser::parsePrimary() {
         }
 }
 
-Expr Parser::parseExpr(int minPrecedence = 0) {
+Expr Parser::parseExpr(int minPrecedence) {
         Expr left = parsePrimary();
         while (true) {
                 std::optional<Operator> op = getOperator();

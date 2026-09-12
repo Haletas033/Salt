@@ -88,11 +88,11 @@ private:
         [[nodiscard]] Token peek(size_t offset) const;
         Token expect(Tokens tokenType);
 
-        std::optional<Operator> getOperator() const;
+        [[nodiscard]] std::optional<Operator> getOperator() const;
 
         Expr parsePrimary();
 
-        Expr parseExpr(int minPrecedence);
+        Expr parseExpr(int minPrecedence = 0);
 
         Annotation parseAnnotation();
 
