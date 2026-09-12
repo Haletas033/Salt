@@ -28,7 +28,7 @@ private:
         llvm::BasicBlock* currentLoopExit = nullptr;
         llvm::BasicBlock* currentLoopCond = nullptr;
 
-        std::map<std::string, llvm::AllocaInst*> locals;
+        std::map<std::string, std::pair<llvm::AllocaInst*, std::string>> locals;
 
         llvm::Type *resolveType(const std::string &type);
 

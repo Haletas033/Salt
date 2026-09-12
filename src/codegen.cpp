@@ -63,25 +63,37 @@ llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
                         if (value.name == "FAILURE")
                                 return llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1);
                         if (const auto it = locals.find(value.name); it != locals.end()) {
-                                return builder.CreateLoad(it->second->getAllocatedType(), it->second, value.name);
+                                return builder.CreateLoad(it->second.first->getAllocatedType(), it->second.first, value.name);
                         }
                         throw std::logic_error("UNKNOWN IDENTIFIER '" + value.name + "'");
                 } else if constexpr (std::same_as<T, AddressOf>) {
                         auto it = locals.find(value.name);
                         if (it == locals.end()) throw std::logic_error("UNDEFINED VARIABLE '" + value.name + "'");
-                        return it->second;  // AllocaInst* is already a pointer
+                        return it->second.first;  // AllocaInst* is already a pointer
                 } else if constexpr (std::same_as<T, ArrayIndex>) {
                         auto it = locals.find(value.name);
                         if (it == locals.end()) throw std::logic_error("UNDEFINED VARIABLE '" + value.name + "'");
                         llvm::Value* index = emitExpr(*value.index, builder);
-                        llvm::Type* allocaType = it->second->getAllocatedType();
-                        llvm::Value* gep = builder.CreateGEP(allocaType, it->second, {
+                        llvm::Type* allocaType = it->second.first->getAllocatedType();
+                        llvm::Value* gep = builder.CreateGEP(allocaType, it->second.first, {
                         llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0),
                                 index
                         });
                         return builder.CreateLoad(allocaType->getArrayElementType(), gep);
                 } else if constexpr (std::same_as<T, Deref>) {
-                        llvm::Value* ptr = emitExpr(*value.pointer, builder);
+                        llvm::Value *ptr = emitExpr(*value.pointer, builder);
+
+                        if (std::holds_alternative<Identifier>(*value.pointer)) {
+                                const auto &ident = std::get<Identifier>(*value.pointer);
+                                auto it = locals.find(ident.name);
+                                if (it != locals.end()) {
+                                        if (const std::string &ptrType = it->second.second; ptrType.ends_with('*')) {
+                                                const std::string pointeeType = ptrType.substr(0, ptrType.size() - 1);
+                                                return builder.CreateLoad(resolveType(pointeeType), ptr);
+                                        }
+                                }
+                        }
+
                         return builder.CreateLoad(llvm::Type::getInt8Ty(context), ptr);
                 } else if constexpr (std::same_as<T, StrLiteral>) {
                         return builder.CreateGlobalString(value.value);
@@ -129,9 +141,9 @@ void Codegen::emitArrayAssignment(const ArrayAssignment& assign, llvm::IRBuilder
         if (it == locals.end()) throw std::logic_error("UNDEFINED VARIABLE '" + assign.name + "'");
 
         llvm::Value* index = emitExpr(*assign.index, builder);
-        llvm::Type* allocaType = it->second->getAllocatedType();
+        llvm::Type* allocaType = it->second.first->getAllocatedType();
 
-        llvm::Value* gep = builder.CreateGEP(allocaType, it->second, {
+        llvm::Value* gep = builder.CreateGEP(allocaType, it->second.first, {
             llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0),
             index
         });
@@ -153,8 +165,8 @@ void Codegen::emitAssignment(const Assignment& assign, llvm::IRBuilder<>& builde
         const auto it = locals.find(assign.name);
         if (it == locals.end()) throw std::logic_error("UNDEFINED IDENTIFIER '" + assign.name + "'");
         llvm::Value* val = emitExpr(*assign.value, builder);
-        val = castTo(val, it->second->getAllocatedType(), builder);
-        builder.CreateStore(val, it->second);
+        val = castTo(val, it->second.first->getAllocatedType(), builder);
+        builder.CreateStore(val, it->second.first);
 }
 
 void Codegen::emitVariableDecl(const VariableDecl& decl, llvm::IRBuilder<>& entryBuilder, llvm::IRBuilder<>& builder) {
@@ -171,7 +183,7 @@ void Codegen::emitVariableDecl(const VariableDecl& decl, llvm::IRBuilder<>& entr
                 builder.CreateStore(value, alloca);
         }
 
-        locals[decl.name] = alloca;
+        locals[decl.name] = {alloca, decl.type};
 }
 
 void Codegen::emitStatement(const Node &node, llvm::IRBuilder<> &builder, llvm::IRBuilder<> &entryBuilder) {
@@ -341,7 +353,7 @@ void Codegen::emitFunctionDef(const FunctionDef& functionDef) {
                 arg.setName(functionDef.prototype.params[i].name);
                 llvm::AllocaInst* alloca = entryBuilder.CreateAlloca(arg.getType(), nullptr, arg.getName());
                 entryBuilder.CreateStore(&arg, alloca);
-                locals[std::string(arg.getName())] = alloca;
+                locals[std::string(arg.getName())] = {alloca, functionDef.prototype.params[i].type};
                 ++i;
         }
 
