@@ -38,6 +38,10 @@ private:
 
         llvm::Value *emitExpr(const Expr &expr, llvm::IRBuilder<> &builder);
 
+        void emitArrayAssignment(const ArrayAssignment &assign, llvm::IRBuilder<> &builder);
+
+        void emitDerefAssignment(const DerefAssignment &assign, llvm::IRBuilder<> &builder);
+
         void emitAssignment(const Assignment &assign, llvm::IRBuilder<> &builder);
 
         void emitVariableDecl(const VariableDecl &decl, llvm::IRBuilder<> &entryBuilder, llvm::IRBuilder<> &builder);

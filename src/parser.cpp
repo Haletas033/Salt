@@ -25,11 +25,46 @@ Token Parser::expect(const Tokens tokenType) {
 
 std::string Parser::parseType() {
         auto type = std::string(getTokenStr(expect(Tokens::IDENTIFIER)));
+
+        if (peek().tokenType == Tokens::L_BRACKET) {
+                ++position;
+                const Expr size = parseExpr();
+
+                if (!std::holds_alternative<IntLiteral>(size))
+                        throw std::logic_error("ARRAY SIZE MUST BE A CONSTANT INTEGER");
+
+                type += '[';
+                type += std::to_string(std::get<IntLiteral>(size).value);
+                type += ']';
+
+                expect(Tokens::R_BRACKET);
+        }
+
         while (peek().tokenType == Tokens::STAR) {
                 type += '*';
                 ++position;
         }
         return type;
+}
+
+std::string Parser::unescapeString(const std::string& raw) {
+        std::string result;
+        for (size_t i = 0; i < raw.size(); i++) {
+                if (raw[i] == '\\' && i + 1 < raw.size()) {
+                        switch (raw[i + 1]) {
+                                case 'n':  result += '\n'; ++i; break;
+                                case 't':  result += '\t'; ++i; break;
+                                case 'r':  result += '\r'; ++i; break;
+                                case '\\': result += '\\'; ++i; break;
+                                case '"':  result += '"';  ++i; break;
+                                case '0':  result += '\0'; ++i; break;
+                                default:   result += raw[i]; break;
+                        }
+                } else {
+                        result += raw[i];
+                }
+        }
+        return result;
 }
 
 std::optional<Operator> Parser::getOperator() const {
@@ -127,21 +162,48 @@ Expr Parser::parsePrimary() {
                         return result;
                 }
 
+                case Tokens::CHAR: {
+                        ++position;
+                        const char ch = unescapeString(std::string(getTokenStr(expect(Tokens::CHAR_LITERAL))))[0];
+                        expect(Tokens::CHAR);
+                        return IntLiteral{static_cast<int>(ch)};
+                }
+
                 case Tokens::STR: {
                         ++position;
-                        result = StrLiteral{std::string{getTokenStr(expect(Tokens::STR_LITERAL))}};
+                        result = StrLiteral{std::string{unescapeString(std::string(getTokenStr(expect(Tokens::STR_LITERAL))))}};
                         expect(Tokens::STR);
                         return result;
                 }
 
-                case Tokens::IDENTIFIER:
+                case Tokens::AND: {
+                        ++position;
+                        const auto name = std::string(getTokenStr(expect(Tokens::IDENTIFIER)));
+                        return AddressOf{name};
+                }
+
+                case Tokens::STAR: {
+                        ++position;
+                        Expr pointer = parsePrimary();
+                        return Deref{std::make_unique<Expr>(std::move(pointer))};
+                }
+
+                case Tokens::IDENTIFIER: {
                         if (peek(1).tokenType == Tokens::L_PARENTHESES) {
                                 return parseFunctionCall();
                         }
-
-                        result = Identifier{std::string{getTokenStr(peek())}};
+                        if (peek(1).tokenType == Tokens::L_BRACKET) {
+                                auto name = std::string(getTokenStr(peek()));
+                                ++position;
+                                ++position;
+                                Expr index = parseExpr();
+                                expect(Tokens::R_BRACKET);
+                                return ArrayIndex{name, std::make_unique<Expr>(std::move(index))};
+                        }
+                        Identifier ident{std::string(getTokenStr(peek()))};
                         ++position;
-                        return result;
+                        return ident;
+                }
                 default:
                         throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
         }
@@ -162,6 +224,30 @@ Expr Parser::parseExpr(int minPrecedence) {
                 };
         }
         return left;
+}
+
+ArrayAssignment Parser::parseArrayAssignment() {
+        ArrayAssignment result{};
+        result.name = getTokenStr(expect(Tokens::IDENTIFIER));
+        expect(Tokens::L_BRACKET);
+        result.index = std::make_unique<Expr>(parseExpr());
+        expect(Tokens::R_BRACKET);
+        expect(Tokens::EQUALS);
+        result.value = std::make_unique<Expr>(parseExpr());
+        expect(Tokens::SEMI_COLON);
+        return result;
+}
+
+DerefAssignment Parser::parseDerefAssignment() {
+        ++position;
+        Expr pointer = parsePrimary();
+        expect(Tokens::EQUALS);
+        Expr value = parseExpr();
+        expect(Tokens::SEMI_COLON);
+        return DerefAssignment{
+                std::make_unique<Expr>(std::move(pointer)),
+                std::make_unique<Expr>(std::move(value))
+            };
 }
 
 Assignment Parser::parseAssignment() {
@@ -286,7 +372,7 @@ Annotation Parser::parseAnnotation() {
                 if (peek().tokenType == Tokens::STR) {
                         ++position;
                         // TODO(parser) Add support for interp
-                        const std::string name{getTokenStr(expect(Tokens::STR_LITERAL))};
+                        const std::string name{unescapeString(std::string(getTokenStr(expect(Tokens::STR_LITERAL))))};
                         result.args.push_back({AnnotationArg::Type::STR, name});
                         expect(Tokens::STR);
                 } else if (peek().tokenType == Tokens::CHAR) {
@@ -380,6 +466,14 @@ Node Parser::parseStatement() {
                 FunctionCall call = parseFunctionCall();
                 expect(Tokens::SEMI_COLON);
                 return Node{start, position, std::move(call)};
+        }
+
+        if (peek().tokenType == Tokens::IDENTIFIER && peek(1).tokenType == Tokens::L_BRACKET) {
+                return Node{start, position, parseArrayAssignment()};
+        }
+
+        if (peek().tokenType == Tokens::STAR) {
+                return Node{start, position, parseDerefAssignment()};
         }
 
         throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");

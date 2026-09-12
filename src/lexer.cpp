@@ -71,7 +71,7 @@ void Lexer::skipComments() {
         }
 }
 
- void Lexer::updateState(const TokenDef& token, std::stack<InsideType>& insideStack, IdentifierType& currentIdentifierType) {
+void Lexer::updateState(const TokenDef& token, std::stack<InsideType>& insideStack, IdentifierType& currentIdentifierType) {
 
         switch (token.token) {
                 case Tokens::INTERP: {

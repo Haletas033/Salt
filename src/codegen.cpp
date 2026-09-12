@@ -1,6 +1,13 @@
 #include <codegen.h>
 
 llvm::Type* Codegen::resolveType(const std::string& type) {
+        if (type.find('[') != std::string::npos) {
+                const size_t bracketPos = type.find('[');
+                const std::string base = type.substr(0, bracketPos);
+                const size_t size = std::stoul(type.substr(bracketPos + 1, type.size() - bracketPos - 2));
+                return llvm::ArrayType::get(resolveType(base), size);
+        }
+
         if (type.ends_with('*')) {
                 return llvm::PointerType::get(context, 0);
         }
@@ -59,6 +66,23 @@ llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
                                 return builder.CreateLoad(it->second->getAllocatedType(), it->second, value.name);
                         }
                         throw std::logic_error("UNKNOWN IDENTIFIER '" + value.name + "'");
+                } else if constexpr (std::same_as<T, AddressOf>) {
+                        auto it = locals.find(value.name);
+                        if (it == locals.end()) throw std::logic_error("UNDEFINED VARIABLE '" + value.name + "'");
+                        return it->second;  // AllocaInst* is already a pointer
+                } else if constexpr (std::same_as<T, ArrayIndex>) {
+                        auto it = locals.find(value.name);
+                        if (it == locals.end()) throw std::logic_error("UNDEFINED VARIABLE '" + value.name + "'");
+                        llvm::Value* index = emitExpr(*value.index, builder);
+                        llvm::Type* allocaType = it->second->getAllocatedType();
+                        llvm::Value* gep = builder.CreateGEP(allocaType, it->second, {
+                        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0),
+                                index
+                        });
+                        return builder.CreateLoad(allocaType->getArrayElementType(), gep);
+                } else if constexpr (std::same_as<T, Deref>) {
+                        llvm::Value* ptr = emitExpr(*value.pointer, builder);
+                        return builder.CreateLoad(llvm::Type::getInt8Ty(context), ptr);
                 } else if constexpr (std::same_as<T, StrLiteral>) {
                         return builder.CreateGlobalString(value.value);
                 } else if constexpr (std::same_as<T, BinaryOp>) {
@@ -100,6 +124,31 @@ llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
         }, expr);
 }
 
+void Codegen::emitArrayAssignment(const ArrayAssignment& assign, llvm::IRBuilder<>& builder) {
+        auto it = locals.find(assign.name);
+        if (it == locals.end()) throw std::logic_error("UNDEFINED VARIABLE '" + assign.name + "'");
+
+        llvm::Value* index = emitExpr(*assign.index, builder);
+        llvm::Type* allocaType = it->second->getAllocatedType();
+
+        llvm::Value* gep = builder.CreateGEP(allocaType, it->second, {
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0),
+            index
+        });
+
+        llvm::Value* value = emitExpr(*assign.value, builder);
+        llvm::Type* elementType = allocaType->getArrayElementType();
+        value = castTo(value, elementType, builder);
+
+        builder.CreateStore(value, gep);
+}
+
+void Codegen::emitDerefAssignment(const DerefAssignment& assign, llvm::IRBuilder<>& builder) {
+        llvm::Value* ptr = emitExpr(*assign.pointer, builder);
+        llvm::Value* val = emitExpr(*assign.value, builder);
+        builder.CreateStore(val, ptr);
+}
+
 void Codegen::emitAssignment(const Assignment& assign, llvm::IRBuilder<>& builder) {
         const auto it = locals.find(assign.name);
         if (it == locals.end()) throw std::logic_error("UNDEFINED IDENTIFIER '" + assign.name + "'");
@@ -125,28 +174,32 @@ void Codegen::emitVariableDecl(const VariableDecl& decl, llvm::IRBuilder<>& entr
         locals[decl.name] = alloca;
 }
 
-void Codegen::emitStatement(const Node& node, llvm::IRBuilder<>& builder, llvm::IRBuilder<>& entryBuilder) {
-        std::visit([this, &builder, &entryBuilder]<typename V>(const V& value) {
-            using T = std::decay_t<V>;
-            if constexpr (std::is_same_v<T, ReturnStatement>) {
-                emitReturnStatement(value, builder);
-            } else if constexpr (std::is_same_v<T, VariableDecl>) {
-                emitVariableDecl(value, entryBuilder, builder);
-            } else if constexpr (std::is_same_v<T, Assignment>) {
-                emitAssignment(value, builder);
-            } else if constexpr (std::is_same_v<T, IfStatement>) {
-                emitIfStatement(value, builder, entryBuilder);
-            } else if constexpr (std::is_same_v<T, WhileStatement>) {
-                emitWhileStatement(value, builder, entryBuilder);
-            } else if constexpr (std::is_same_v<T, BreakStatement>) {
-                emitBreakStatement(builder);
-            } else if constexpr (std::is_same_v<T, ContinueStatement>) {
-                emitContinueStatement(builder);
-            } else if constexpr (std::is_same_v<T, FunctionCall>) {
-                emitFunctionCall(value, builder);
-            } else {
-                throw std::logic_error("UNSUPPORTED NODE IN FUNCTION BODY");
-            }
+void Codegen::emitStatement(const Node &node, llvm::IRBuilder<> &builder, llvm::IRBuilder<> &entryBuilder) {
+        std::visit([this, &builder, &entryBuilder]<typename V>(const V &value) {
+                using T = std::decay_t<V>;
+                if constexpr (std::is_same_v<T, ReturnStatement>) {
+                        emitReturnStatement(value, builder);
+                } else if constexpr (std::is_same_v<T, VariableDecl>) {
+                        emitVariableDecl(value, entryBuilder, builder);
+                } else if constexpr (std::is_same_v<T, Assignment>) {
+                        emitAssignment(value, builder);
+                } else if constexpr (std::is_same_v<T, ArrayAssignment>) {
+                        emitArrayAssignment(value, builder);
+                } else if constexpr (std::is_same_v<T, DerefAssignment>) {
+                        emitDerefAssignment(value, builder);
+                } else if constexpr (std::is_same_v<T, IfStatement>) {
+                        emitIfStatement(value, builder, entryBuilder);
+                } else if constexpr (std::is_same_v<T, WhileStatement>) {
+                        emitWhileStatement(value, builder, entryBuilder);
+                } else if constexpr (std::is_same_v<T, BreakStatement>) {
+                        emitBreakStatement(builder);
+                } else if constexpr (std::is_same_v<T, ContinueStatement>) {
+                        emitContinueStatement(builder);
+                } else if constexpr (std::is_same_v<T, FunctionCall>) {
+                        emitFunctionCall(value, builder);
+                } else {
+                        throw std::logic_error("UNSUPPORTED NODE IN FUNCTION BODY");
+                }
         }, node.value);
 }
 

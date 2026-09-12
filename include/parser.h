@@ -7,6 +7,8 @@
 
 #include "lexer.h"
 
+struct Deref;
+struct ArrayIndex;
 struct FunctionCall;
 struct BinaryOp;
 struct Node;
@@ -42,11 +44,35 @@ struct Operator {
         int precedence{};
 };
 
-using Expr = std::variant<IntLiteral, FloatLiteral, StrLiteral, Identifier, BinaryOp, FunctionCall>;
+struct AddressOf {
+        std::string name;
+};
+
+using Expr = std::variant<IntLiteral, FloatLiteral, StrLiteral, AddressOf, ArrayIndex, Deref, Identifier, BinaryOp, FunctionCall>;
 struct BinaryOp {
         std::unique_ptr<Expr> lvalue{};
         std::unique_ptr<Expr> rvalue{};
         Operator op{};
+};
+
+struct Deref {
+        std::unique_ptr<Expr> pointer;
+};
+
+struct DerefAssignment {
+        std::unique_ptr<Expr> pointer;
+        std::unique_ptr<Expr> value;
+};
+
+struct ArrayIndex {
+        std::string name;
+        std::unique_ptr<Expr> index;
+};
+
+struct ArrayAssignment {
+        std::string name;
+        std::unique_ptr<Expr> index;
+        std::unique_ptr<Expr> value;
 };
 
 struct Assignment {
@@ -128,6 +154,8 @@ struct Node {
                 BreakStatement,
                 ContinueStatement,
                 WhileStatement,
+                ArrayAssignment,
+                DerefAssignment,
                 Assignment,
                 ReturnStatement
         > value;
@@ -146,11 +174,17 @@ private:
 
         std::string parseType();
 
+        static std::string unescapeString(const std::string &raw);
+
         [[nodiscard]] std::optional<Operator> getOperator() const;
 
         Expr parsePrimary();
 
         Expr parseExpr(int minPrecedence = 0);
+
+        ArrayAssignment parseArrayAssignment();
+
+        DerefAssignment parseDerefAssignment();
 
         Assignment parseAssignment();
 
