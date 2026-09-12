@@ -80,10 +80,17 @@ void Codegen::emitReturnStatement(const ReturnStatement& statement, llvm::IRBuil
 
 void Codegen::emitFunctionDef(const FunctionDef& functionDef) {
         locals.clear();
+
         llvm::Type* returnType = nullptr;
         returnType = resolveType(functionDef.returnType);
 
-        llvm::FunctionType* funcType = llvm::FunctionType::get(returnType, false);
+        std::vector<llvm::Type*> paramTypes;
+        for (const auto&[type, name] : functionDef.parameters) {
+                if (type == "void") continue;
+                paramTypes.push_back(resolveType(type));
+        }
+
+        llvm::FunctionType* funcType = llvm::FunctionType::get(returnType, paramTypes, false);
 
         llvm::Function* function = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, functionDef.name, module);
 
@@ -91,6 +98,16 @@ void Codegen::emitFunctionDef(const FunctionDef& functionDef) {
         llvm::IRBuilder entryBuilder(entryBlock);
         entryBuilder.SetInsertPoint(entryBlock, entryBlock->begin());
         llvm::IRBuilder builder(entryBlock);
+
+        // Handle args
+        size_t i = 0;
+        for (auto& arg : function->args()) {
+                arg.setName(functionDef.parameters[i].name);
+                llvm::AllocaInst* alloca = entryBuilder.CreateAlloca(arg.getType(), nullptr, arg.getName());
+                entryBuilder.CreateStore(&arg, alloca);
+                locals[std::string(arg.getName())] = alloca;
+                ++i;
+        }
 
         // Handle body
         for (const auto& node : functionDef.body) {
