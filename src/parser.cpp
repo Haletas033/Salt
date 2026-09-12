@@ -119,8 +119,38 @@ Expr Parser::parseExpr(int minPrecedence) {
         return left;
 }
 
+Assignment Parser::parseAssignment() {
+        Assignment result{};
+        result.name = getTokenStr(expect(Tokens::IDENTIFIER));
+        expect(Tokens::EQUALS);
+        result.value = std::make_unique<Expr>(parseExpr());
+        expect(Tokens::SEMI_COLON);
+        return result;
+}
+
+VariableDecl Parser::parseVariableDecl() {
+        VariableDecl result{};
+        ++position;
+        result.type = getTokenStr(expect(Tokens::IDENTIFIER));
+        result.name = getTokenStr(expect(Tokens::IDENTIFIER));
+
+        if (peek().tokenType == Tokens::SEMI_COLON) {
+                ++position;
+                result.value = std::nullopt;
+                return result;
+        }
+
+        if (peek().tokenType == Tokens::EQUALS) {
+                ++position;
+                result.value = std::make_unique<Expr>(parseExpr());
+                expect(Tokens::SEMI_COLON);
+                return result;
+        }
+
+        throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
+}
+
 Annotation Parser::parseAnnotation() {
-        const size_t start = position;
         Annotation result{};
         ++position;
 
@@ -183,6 +213,24 @@ ReturnStatement Parser::parseReturnStatement() {
         return result;
 }
 
+Node Parser::parseStatement() {
+        const size_t start = position;
+
+        if (peek().tokenType == Tokens::IDENTIFIER && getTokenStr(peek()) == "return") {
+                return Node{start, position, parseReturnStatement()};
+        }
+
+        if (peek().tokenType == Tokens::PERCENT) {
+                return Node{start, position, parseVariableDecl()};
+        }
+
+        if (peek().tokenType == Tokens::IDENTIFIER && peek(1).tokenType == Tokens::EQUALS) {
+                return Node{start, position, parseAssignment()};
+        }
+
+        throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
+}
+
 FunctionDef Parser::parseFunctionDef() {
         FunctionDef result{};
         ++position;
@@ -216,18 +264,7 @@ FunctionDef Parser::parseFunctionDef() {
 
         // Handle body
         while (peek().tokenType != Tokens::R_BRACE) {
-                if (peek().tokenType == Tokens::IDENTIFIER && getTokenStr(peek()) == "return") {
-                        size_t start = position;
-                        ReturnStatement statement = parseReturnStatement();
-                        result.body.push_back(Node{
-                            .tokenStart = start,
-                            .tokenEnd = position,
-                            .value = std::move(statement)
-                        });
-                        break;
-                }
-
-                throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
+                result.body.push_back(parseStatement());
         }
 
         expect(Tokens::R_BRACE);
@@ -255,8 +292,9 @@ void Parser::run() {
                                 }
 
                                 if (const auto type = peek(i).tokenType; type == Tokens::EQUALS || type == Tokens::SEMI_COLON) {
-                                        throw std::logic_error("VARIABLE DECLARATIONS NOT YET IMPLEMENTED");
-                                        // TODO(parser) Parse variable creation
+                                        const size_t start = position;
+                                        VariableDecl variableDecl = parseVariableDecl();
+                                        program.push_back({start, position, std::move(variableDecl)});
                                         break;
                                 }
 

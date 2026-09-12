@@ -1,5 +1,6 @@
 #ifndef SALT_CODEGEN_H
 #define SALT_CODEGEN_H
+#include <map>
 #include <utility>
 
 #include <llvm/IR/LLVMContext.h>
@@ -20,10 +21,17 @@ class Codegen {
 private:
         Program program;
         llvm::LLVMContext context;
+        std::map<std::string, llvm::AllocaInst*> locals;
+
+        llvm::Type *resolveType(const std::string &type);
 
         void emitAnnotation(const Annotation &annotation);
 
         llvm::Value *emitExpr(const Expr &expr, llvm::IRBuilder<> &builder);
+
+        void emitAssignment(const Assignment &assign, llvm::IRBuilder<> &builder);
+
+        void emitVariableDecl(const VariableDecl &decl, llvm::IRBuilder<> &entryBuilder, llvm::IRBuilder<> &builder);
 
         void emitReturnStatement(const ReturnStatement &statement, llvm::IRBuilder<> &builder);
 

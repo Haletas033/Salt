@@ -44,6 +44,17 @@ struct BinaryOp {
         Operator op{};
 };
 
+struct Assignment {
+        std::string name;
+        std::unique_ptr<Expr> value;
+};
+
+struct VariableDecl {
+        std::string type;
+        std::string name;
+        std::optional<std::unique_ptr<Expr>> value;
+};
+
 struct AnnotationArg {
         enum class Type { IDENTIFIER, INTEGER, FLOATING, STR, CHAR};
         Type type;
@@ -74,7 +85,7 @@ struct FunctionDef {
 struct Node {
         size_t tokenStart;
         size_t tokenEnd;
-        std::variant<Annotation, FunctionDef, ReturnStatement> value;
+        std::variant<Annotation, FunctionDef, VariableDecl, Assignment, ReturnStatement> value;
 };
 
 using Program = std::vector<Node>;
@@ -94,9 +105,15 @@ private:
 
         Expr parseExpr(int minPrecedence = 0);
 
+        Assignment parseAssignment();
+
+        VariableDecl parseVariableDecl();
+
         Annotation parseAnnotation();
 
         ReturnStatement parseReturnStatement();
+
+        Node parseStatement();
 
         FunctionDef parseFunctionDef();
 
