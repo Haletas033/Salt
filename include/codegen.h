@@ -56,6 +56,8 @@ private:
 
         llvm::LoadInst *emitArrowAccess(const ArrowAccess &access, llvm::IRBuilder<> &builder);
 
+        llvm::Value *emitSizeOf(const SizeOf &sizeOf);
+
         void emitVariableDecl(const VariableDecl &decl, llvm::IRBuilder<> &entryBuilder, llvm::IRBuilder<> &builder);
 
         void emitStatement(const Node &node, llvm::IRBuilder<> &builder, llvm::IRBuilder<> &entryBuilder);

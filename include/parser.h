@@ -50,7 +50,24 @@ struct AddressOf {
         std::string name;
 };
 
-using Expr = std::variant<IntLiteral, FloatLiteral, StrLiteral, AddressOf, ArrayIndex, Deref, FieldAccess, ArrowAccess, Identifier, BinaryOp, FunctionCall>;
+struct SizeOf {
+        std::string type;
+};
+
+using Expr = std::variant<
+        IntLiteral,
+        FloatLiteral,
+        StrLiteral,
+        AddressOf,
+        ArrayIndex,
+        Deref,
+        FieldAccess,
+        ArrowAccess,
+        Identifier,
+        SizeOf,
+        BinaryOp,
+        FunctionCall
+>;
 struct BinaryOp {
         std::unique_ptr<Expr> lvalue{};
         std::unique_ptr<Expr> rvalue{};
@@ -219,6 +236,8 @@ private:
         DerefAssignment parseDerefAssignment();
 
         Assignment parseAssignment();
+
+        SizeOf parseSizeOf();
 
         VariableDecl parseVariableDecl();
 

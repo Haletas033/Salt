@@ -189,6 +189,10 @@ Expr Parser::parsePrimary() {
                 }
 
                 case Tokens::IDENTIFIER: {
+                        if (getTokenStr(peek()) == "sizeof") {
+                                return parseSizeOf();
+                        }
+
                         if (peek(1).tokenType == Tokens::L_PARENTHESES) {
                                 return parseFunctionCall();
                         }
@@ -275,6 +279,15 @@ Assignment Parser::parseAssignment() {
         expect(Tokens::EQUALS);
         result.value = std::make_unique<Expr>(parseExpr());
         expect(Tokens::SEMI_COLON);
+        return result;
+}
+
+SizeOf Parser::parseSizeOf() {
+        SizeOf result{};
+        ++position;
+        expect(Tokens::L_PARENTHESES);
+        result.type = parseType();
+        expect(Tokens::R_PARENTHESES);
         return result;
 }
 

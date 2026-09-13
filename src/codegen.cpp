@@ -102,6 +102,8 @@ llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
                         return emitFieldAccess(value, builder);
                 } else if constexpr (std::same_as<T, ArrowAccess>) {
                         return emitArrowAccess(value, builder);
+                } else if constexpr (std::same_as<T, SizeOf>) {
+                        return emitSizeOf(value);
                 } else if constexpr (std::same_as<T, StrLiteral>) {
                         return builder.CreateGlobalString(value.value);
                 } else if constexpr (std::same_as<T, BinaryOp>) {
@@ -259,6 +261,18 @@ llvm::LoadInst *Codegen::emitArrowAccess(const ArrowAccess &access, llvm::IRBuil
         llvm::Value* gep = builder.CreateStructGEP(structTypes[typeName], ptr, index);
 
         return builder.CreateLoad(resolveType(fieldType), gep);
+}
+
+llvm::Value *Codegen::emitSizeOf(const SizeOf &sizeOf) {
+        llvm::Type* type = resolveType(sizeOf.type);
+
+        if (type->isVoidTy())
+                throw std::logic_error("cannot use sizeof(void)");
+
+        const uint64_t size = module.getDataLayout().getTypeAllocSize(type);
+
+        return llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), size);
+
 }
 
 void Codegen::emitVariableDecl(const VariableDecl& decl, llvm::IRBuilder<>& entryBuilder, llvm::IRBuilder<>& builder) {
