@@ -4,6 +4,7 @@
 #include <optional>
 #include <sstream>
 #include <stack>
+#include <utility>
 #include <vector>
 
 #include "tokens.h"
@@ -43,11 +44,7 @@ public:
         std::string source{};
         std::vector<Token> tokens{};
 
-        explicit Lexer(const std::ifstream& file) {
-                std::stringstream buffer{};
-                buffer << file.rdbuf();
-                source = buffer.str();
-
+        explicit Lexer(std::string file) : source(std::move(file)) {
                 run();
         }
 };

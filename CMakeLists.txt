@@ -14,6 +14,8 @@ add_executable(Salt
         include/parser.h
         include/codegen.h
         src/codegen.cpp
+        include/preprocessor.h
+        src/preprocessor.cpp
 )
 
 target_include_directories(Salt PRIVATE

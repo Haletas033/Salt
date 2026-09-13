@@ -4,6 +4,7 @@
 #include "codegen.h"
 #include "lexer.h"
 #include "parser.h"
+#include "preprocessor.h"
 
 int main(const int argc, char **argv) {
         if (argc != 2) {
@@ -19,7 +20,9 @@ int main(const int argc, char **argv) {
                 return 1;
         }
 
-        Lexer lexer(fileContents);
+        Preprocessor preprocessor(fileContents);
+
+        Lexer lexer(preprocessor.source);
 
         Parser parser(lexer.source, lexer.tokens);
 
