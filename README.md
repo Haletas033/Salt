@@ -1,6 +1,6 @@
 # Salt
 
-A compiled, statically typed programming language targeting native machine code via LLVM.
+A compiled, statically typed programming language targeting native machine code via LLVM. Designed to do all the small things that make a project fit together
 
 ## Building
 
