@@ -19,7 +19,7 @@ make
 ## Usage
 
 ```bash
-salt <file> [options]
+salt_shaker <file> [options]
 
 Options:
   -o <name>      Output binary name (default: output)
