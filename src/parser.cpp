@@ -192,24 +192,43 @@ Expr Parser::parsePrimary() {
                         if (peek(1).tokenType == Tokens::L_PARENTHESES) {
                                 return parseFunctionCall();
                         }
+
                         if (peek(1).tokenType == Tokens::L_BRACKET) {
-                                auto name = std::string(getTokenStr(peek()));
+                                const auto name = std::string(getTokenStr(peek()));
                                 ++position;
                                 ++position;
                                 Expr index = parseExpr();
                                 expect(Tokens::R_BRACKET);
                                 return ArrayIndex{name, std::make_unique<Expr>(std::move(index))};
                         }
+
+                        if (peek(1).tokenType == Tokens::DOT) {
+                                const auto object = std::string(getTokenStr(peek()));
+                                ++position;
+                                ++position;
+                                const auto field = std::string(getTokenStr(expect(Tokens::IDENTIFIER)));
+                                return FieldAccess{object, field};
+                        }
+
+                        if (peek(1).tokenType == Tokens::R_ARROW) {
+                                const auto object = std::string(getTokenStr(peek()));
+                                ++position;
+                                ++position;
+                                const auto field = std::string(getTokenStr(expect(Tokens::IDENTIFIER)));
+                                return ArrowAccess{object, field};
+                        }
+
                         Identifier ident{std::string(getTokenStr(peek()))};
                         ++position;
                         return ident;
                 }
+
                 default:
                         throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
         }
 }
 
-Expr Parser::parseExpr(int minPrecedence) {
+Expr Parser::parseExpr(const int minPrecedence) {
         Expr left = parsePrimary();
         while (true) {
                 std::optional<Operator> op = getOperator();
@@ -411,16 +430,38 @@ ReturnStatement Parser::parseReturnStatement() {
 
         // Handle literals
         if (peek().tokenType != Tokens::L_BRACE) {
-                result.value = parseExpr();
+                result.value = std::make_unique<Expr>(parseExpr());
                 expect(Tokens::SEMI_COLON);
                 return result;
         }
 
         // Handle braced
         ++position;
-        result.value = parseExpr();
+        result.value = std::make_unique<Expr>(parseExpr());
         if (peek().tokenType == Tokens::SEMI_COLON) { ++position; } // Allow both semi-colon and no semi-colon in braces
         expect(Tokens::R_BRACE);
+        expect(Tokens::SEMI_COLON);
+        return result;
+}
+
+FieldAssignment Parser::parseFieldAssignment() {
+        FieldAssignment result{};
+        result.object = std::string(getTokenStr(expect(Tokens::IDENTIFIER)));
+        expect(Tokens::DOT);
+        result.field = std::string(getTokenStr(expect(Tokens::IDENTIFIER)));
+        expect(Tokens::EQUALS);
+        result.value = std::make_unique<Expr>(parseExpr());
+        expect(Tokens::SEMI_COLON);
+        return result;
+}
+
+ArrowAssignment Parser::parseArrowAssignment() {
+        ArrowAssignment result{};
+        result.object = std::string(getTokenStr(expect(Tokens::IDENTIFIER)));
+        expect(Tokens::R_ARROW);
+        result.field = std::string(getTokenStr(expect(Tokens::IDENTIFIER)));
+        expect(Tokens::EQUALS);
+        result.value = std::make_unique<Expr>(parseExpr());
         expect(Tokens::SEMI_COLON);
         return result;
 }
@@ -476,6 +517,14 @@ Node Parser::parseStatement() {
                 return Node{start, position, parseDerefAssignment()};
         }
 
+        if (peek().tokenType == Tokens::IDENTIFIER && peek(1).tokenType == Tokens::DOT) {
+                return Node{start, position, parseFieldAssignment()};
+        }
+
+        if (peek().tokenType == Tokens::IDENTIFIER && peek(1).tokenType == Tokens::R_ARROW) {
+                return Node{start, position, parseArrowAssignment()};
+        }
+
         throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
 }
 
@@ -526,6 +575,26 @@ FunctionDef Parser::parseFunctionDef() {
         return result;
 }
 
+StructDef Parser::parseStructDef() {
+        StructDef result{};
+        ++position;
+        expect(Tokens::IDENTIFIER);
+        result.name = getTokenStr(expect(Tokens::IDENTIFIER));
+        expect(Tokens::L_BRACE);
+        while (peek().tokenType != Tokens::R_BRACE) {
+                expect(Tokens::PERCENT);
+                Parameter field{};
+                field.type = parseType();
+                expect(Tokens::DOT);
+                field.name = std::string(getTokenStr(expect(Tokens::IDENTIFIER)));
+                expect(Tokens::SEMI_COLON);
+                result.fields.push_back(field);
+        }
+        expect(Tokens::R_BRACE);
+        expect(Tokens::SEMI_COLON);
+        return result;
+}
+
 void Parser::run() {
         while (peek().tokenType != Tokens::EOF_TOKEN) {
                 if (peek().tokenType == Tokens::AT_SIGN) {
@@ -542,25 +611,24 @@ void Parser::run() {
                 }
 
                 if (peek().tokenType == Tokens::PERCENT) {
+                        const size_t start = position;
+                        if (getTokenStr(peek(1)) == "struct") {
+                                StructDef structDef = parseStructDef();
+                                program.push_back({start, position, std::move(structDef)});
+                                continue;
+                        }
+
                         int i = 1;
                         while (true) {
                                 if (peek(i).tokenType == Tokens::L_PARENTHESES) {
-                                        const size_t start = position;
                                         FunctionDef functionDef = parseFunctionDef();
                                         program.push_back({start, position, std::move(functionDef)});
                                         break;
                                 }
 
                                 if (const auto type = peek(i).tokenType; type == Tokens::EQUALS || type == Tokens::SEMI_COLON) {
-                                        const size_t start = position;
                                         VariableDecl variableDecl = parseVariableDecl();
                                         program.push_back({start, position, std::move(variableDecl)});
-                                        break;
-                                }
-
-                                if (peek(i).tokenType == Tokens::L_BRACE) {
-                                        throw std::logic_error("STRUCT / CLASS / INTERFACE DECLARATIONS NOT YET IMPLEMENTED");
-                                        // TODO(parser) Deduce between struct, class, and interface then parse
                                         break;
                                 }
 

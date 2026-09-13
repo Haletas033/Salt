@@ -7,6 +7,8 @@
 
 #include "lexer.h"
 
+struct ArrowAccess;
+struct FieldAccess;
 struct Deref;
 struct ArrayIndex;
 struct FunctionCall;
@@ -48,7 +50,7 @@ struct AddressOf {
         std::string name;
 };
 
-using Expr = std::variant<IntLiteral, FloatLiteral, StrLiteral, AddressOf, ArrayIndex, Deref, Identifier, BinaryOp, FunctionCall>;
+using Expr = std::variant<IntLiteral, FloatLiteral, StrLiteral, AddressOf, ArrayIndex, Deref, FieldAccess, ArrowAccess, Identifier, BinaryOp, FunctionCall>;
 struct BinaryOp {
         std::unique_ptr<Expr> lvalue{};
         std::unique_ptr<Expr> rvalue{};
@@ -117,7 +119,7 @@ struct Annotation {
 };
 
 struct ReturnStatement {
-        Expr value;
+        std::unique_ptr<Expr> value;
 };
 
 struct Parameter {
@@ -137,6 +139,33 @@ struct FunctionDef {
         std::vector<Node> body{};
 };
 
+struct StructDef {
+        std::string name;
+        std::vector<Parameter> fields;
+};
+
+struct FieldAccess {
+        std::string object;
+        std::string field;
+};
+
+struct FieldAssignment {
+        std::string object;
+        std::string field;
+        std::unique_ptr<Expr> value;
+};
+
+struct ArrowAccess {
+        std::string object;
+        std::string field;
+};
+
+struct ArrowAssignment {
+        std::string object;
+        std::string field;
+        std::unique_ptr<Expr> value;
+};
+
 struct ExternC {
         std::vector<FunctionPrototype> prototypes{};
 };
@@ -147,6 +176,7 @@ struct Node {
         std::variant<
                 Annotation,
                 ExternC,
+                StructDef,
                 FunctionDef,
                 VariableDecl,
                 FunctionCall,
@@ -156,6 +186,8 @@ struct Node {
                 WhileStatement,
                 ArrayAssignment,
                 DerefAssignment,
+                FieldAssignment,
+                ArrowAssignment,
                 Assignment,
                 ReturnStatement
         > value;
@@ -202,11 +234,17 @@ private:
 
         ReturnStatement parseReturnStatement();
 
+        FieldAssignment parseFieldAssignment();
+
+        ArrowAssignment parseArrowAssignment();
+
         Node parseStatement();
 
         FunctionPrototype parsePrototype();
 
         FunctionDef parseFunctionDef();
+
+        StructDef parseStructDef();
 
         [[nodiscard]] std::string_view getTokenStr(const Token& token) const;
 

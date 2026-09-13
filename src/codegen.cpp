@@ -1,4 +1,5 @@
 #include <codegen.h>
+#include <iostream>
 
 llvm::Type* Codegen::resolveType(const std::string& type) {
         if (type.find('[') != std::string::npos) {
@@ -20,6 +21,8 @@ llvm::Type* Codegen::resolveType(const std::string& type) {
         if (type == "f64")                  return llvm::Type::getDoubleTy(context);
         if (type == "bool")                 return llvm::Type::getInt8Ty(context);
         if (type == "void")                 return llvm::Type::getVoidTy(context);
+
+        if (structTypes.contains(type)) return structTypes[type];
         throw std::logic_error("UNKNOWN TYPE '" + type + "'");
 }
 
@@ -95,6 +98,10 @@ llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
                         }
 
                         return builder.CreateLoad(llvm::Type::getInt8Ty(context), ptr);
+                } else if constexpr (std::same_as<T, FieldAccess>) {
+                        return emitFieldAccess(value, builder);
+                } else if constexpr (std::same_as<T, ArrowAccess>) {
+                        return emitArrowAccess(value, builder);
                 } else if constexpr (std::same_as<T, StrLiteral>) {
                         return builder.CreateGlobalString(value.value);
                 } else if constexpr (std::same_as<T, BinaryOp>) {
@@ -161,12 +168,97 @@ void Codegen::emitDerefAssignment(const DerefAssignment& assign, llvm::IRBuilder
         builder.CreateStore(val, ptr);
 }
 
+void Codegen::emitFieldAssignment(const FieldAssignment& assign, llvm::IRBuilder<>& builder) {
+        const auto it = locals.find(assign.object);
+        if (it == locals.end()) throw std::logic_error("UNDEFINED VARIABLE '" + assign.object + "'");
+
+        const std::string& typeName = it->second.second;
+        const auto fieldIt = structFields.find(typeName);
+        if (fieldIt == structFields.end()) throw std::logic_error("'" + typeName + "' IS NOT A STRUCT");
+
+        const auto& fields = fieldIt->second;
+        const auto fieldIdx = std::ranges::find(fields, assign.field);
+        if (fieldIdx == fields.end()) throw std::logic_error("UNKNOWN FIELD '" + assign.field + "'");
+        const size_t index = std::distance(fields.begin(), fieldIdx);
+
+        llvm::Value* gep = builder.CreateStructGEP(it->second.first->getAllocatedType(), it->second.first, index);
+
+        llvm::Value* val = emitExpr(*assign.value, builder);
+        builder.CreateStore(val, gep);
+}
+
+void Codegen::emitArrowAssignment(const ArrowAssignment& assign, llvm::IRBuilder<>& builder) {
+        const auto it = locals.find(assign.object);
+        if (it == locals.end()) throw std::logic_error("UNDEFINED VARIABLE '" + assign.object + "'");
+
+        const std::string& rawType = it->second.second;
+        const std::string typeName = rawType.substr(0, rawType.size() - 1);
+
+        const auto fieldIt = structFields.find(typeName);
+        if (fieldIt == structFields.end()) throw std::logic_error("'" + typeName + "' IS NOT A STRUCT");
+
+        const auto& fields = fieldIt->second;
+        const auto fieldIdx = std::ranges::find(fields, assign.field);
+        if (fieldIdx == fields.end()) throw std::logic_error("UNKNOWN FIELD '" + assign.field + "'");
+        const size_t index = std::distance(fields.begin(), fieldIdx);
+
+        llvm::Value* ptr = builder.CreateLoad(llvm::PointerType::get(context, 0), it->second.first);
+        llvm::Value* gep = builder.CreateStructGEP(structTypes[typeName], ptr, index);
+
+        llvm::Value* val = emitExpr(*assign.value, builder);
+        builder.CreateStore(val, gep);
+}
+
 void Codegen::emitAssignment(const Assignment& assign, llvm::IRBuilder<>& builder) {
         const auto it = locals.find(assign.name);
         if (it == locals.end()) throw std::logic_error("UNDEFINED IDENTIFIER '" + assign.name + "'");
         llvm::Value* val = emitExpr(*assign.value, builder);
         val = castTo(val, it->second.first->getAllocatedType(), builder);
         builder.CreateStore(val, it->second.first);
+}
+
+llvm::LoadInst *Codegen::emitFieldAccess(const FieldAccess &access, llvm::IRBuilder<> &builder) {
+        const auto it = locals.find(access.object);
+        if (it == locals.end()) throw std::logic_error("UNDEFINED VARIABLE '" + access.object + "'");
+
+        const std::string& typeName = it->second.second;
+        const auto fieldIt = structFields.find(typeName);
+        if (fieldIt == structFields.end()) throw std::logic_error("'" + typeName + "' IS NOT A STRUCT");
+
+        const auto& fields = fieldIt->second;
+        const auto fieldIdx = std::ranges::find(fields, access.field);
+        if (fieldIdx == fields.end()) throw std::logic_error("UNKNOWN FIELD '" + access.field + "'");
+        const size_t index = std::distance(fields.begin(), fieldIdx);
+
+        const std::string& fieldType = structFieldTypes[typeName][index];
+
+        llvm::Value* ptr = builder.CreateLoad(llvm::PointerType::get(context, 0), it->second.first);
+        llvm::Value* gep = builder.CreateStructGEP(structTypes[typeName], ptr, index);
+
+        return builder.CreateLoad(resolveType(fieldType), gep);
+}
+
+llvm::LoadInst *Codegen::emitArrowAccess(const ArrowAccess &access, llvm::IRBuilder<> &builder) {
+        const auto it = locals.find(access.object);
+        if (it == locals.end()) throw std::logic_error("UNDEFINED VARIABLE '" + access.object + "'");
+
+        const std::string& rawType = it->second.second;
+        const std::string typeName = rawType.substr(0, rawType.size() - 1);
+
+        const auto fieldIt = structFields.find(typeName);
+        if (fieldIt == structFields.end()) throw std::logic_error("'" + typeName + "' IS NOT A STRUCT");
+
+        const auto& fields = fieldIt->second;
+        const auto fieldIdx = std::ranges::find(fields, access.field);
+        if (fieldIdx == fields.end()) throw std::logic_error("UNKNOWN FIELD '" + access.field + "'");
+        const size_t index = std::distance(fields.begin(), fieldIdx);
+
+        const std::string& fieldType = structFieldTypes[typeName][index];
+
+        llvm::Value* ptr = builder.CreateLoad(llvm::PointerType::get(context, 0), it->second.first);
+        llvm::Value* gep = builder.CreateStructGEP(structTypes[typeName], ptr, index);
+
+        return builder.CreateLoad(resolveType(fieldType), gep);
 }
 
 void Codegen::emitVariableDecl(const VariableDecl& decl, llvm::IRBuilder<>& entryBuilder, llvm::IRBuilder<>& builder) {
@@ -199,6 +291,10 @@ void Codegen::emitStatement(const Node &node, llvm::IRBuilder<> &builder, llvm::
                         emitArrayAssignment(value, builder);
                 } else if constexpr (std::is_same_v<T, DerefAssignment>) {
                         emitDerefAssignment(value, builder);
+                } else if constexpr (std::is_same_v<T, FieldAssignment>) {
+                        emitFieldAssignment(value, builder);
+                } else if constexpr (std::is_same_v<T, ArrowAssignment>) {
+                        emitArrowAssignment(value, builder);
                 } else if constexpr (std::is_same_v<T, IfStatement>) {
                         emitIfStatement(value, builder, entryBuilder);
                 } else if constexpr (std::is_same_v<T, WhileStatement>) {
@@ -307,7 +403,7 @@ void Codegen::emitReturnStatement(const ReturnStatement& statement, llvm::IRBuil
                 builder.CreateRetVoid();
                 return;
         }
-        llvm::Value* val = emitExpr(statement.value, builder);
+        llvm::Value* val = emitExpr(*statement.value, builder);
         val = castTo(val, currentFunction->getReturnType(), builder);
         builder.CreateRet(val);
 }
@@ -369,6 +465,23 @@ void Codegen::emitFunctionDef(const FunctionDef& functionDef) {
         }
 }
 
+void Codegen::emitStructDef(const StructDef& def) {
+        std::vector<llvm::Type*> fieldTypes;
+        std::vector<std::string> fieldNames;
+        std::vector<std::string> fieldTypeNames;
+
+        for (const auto&[type, name] : def.fields) {
+                fieldTypes.push_back(resolveType(type));
+                fieldNames.push_back(name);
+                fieldTypeNames.push_back(type);
+        }
+
+        llvm::StructType* structType = llvm::StructType::create(context, fieldTypes, def.name);
+        structTypes[def.name] = structType;
+        structFields[def.name] = fieldNames;
+        structFieldTypes[def.name] = fieldTypeNames;
+}
+
 void Codegen::emitExternC(const ExternC& externC) {
         for (const auto& proto : externC.prototypes) {
                 emitPrototype(proto);
@@ -416,7 +529,9 @@ void Codegen::run() {
                                 emitExternC(value);
                         } else if constexpr (std::is_same_v<T, FunctionDef>) {
                                 emitFunctionDef(value);
-                        }  else {
+                        } else if constexpr (std::is_same_v<T, StructDef>) {
+                                emitStructDef(value);
+                        } else {
                                 throw std::logic_error("UNSUPPORTED NODE TYPE");
                         }
                 }, node.value);

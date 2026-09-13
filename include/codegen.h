@@ -28,6 +28,10 @@ private:
         llvm::BasicBlock* currentLoopExit = nullptr;
         llvm::BasicBlock* currentLoopCond = nullptr;
 
+        std::map<std::string, llvm::StructType*> structTypes;
+        std::map<std::string, std::vector<std::string>> structFields;
+        std::map<std::string, std::vector<std::string>> structFieldTypes;
+
         std::map<std::string, std::pair<llvm::AllocaInst*, std::string>> locals;
 
         llvm::Type *resolveType(const std::string &type);
@@ -42,7 +46,15 @@ private:
 
         void emitDerefAssignment(const DerefAssignment &assign, llvm::IRBuilder<> &builder);
 
+        void emitFieldAssignment(const FieldAssignment &assign, llvm::IRBuilder<> &builder);
+
+        void emitArrowAssignment(const ArrowAssignment &assign, llvm::IRBuilder<> &builder);
+
         void emitAssignment(const Assignment &assign, llvm::IRBuilder<> &builder);
+
+        llvm::LoadInst *emitFieldAccess(const FieldAccess &access, llvm::IRBuilder<> &builder);
+
+        llvm::LoadInst *emitArrowAccess(const ArrowAccess &access, llvm::IRBuilder<> &builder);
 
         void emitVariableDecl(const VariableDecl &decl, llvm::IRBuilder<> &entryBuilder, llvm::IRBuilder<> &builder);
 
@@ -67,6 +79,8 @@ private:
         llvm::Function *emitPrototype(const FunctionPrototype &prototype);
 
         void emitFunctionDef(const FunctionDef &functionDef);
+
+        void emitStructDef(const StructDef &def);
 
         void emitExternC(const ExternC &externC);
 
