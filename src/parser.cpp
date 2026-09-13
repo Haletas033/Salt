@@ -9,6 +9,10 @@ std::string_view Parser::getTokenStr(const Token &token) const {
         return std::string_view(source).substr(token.tokenStart, token.tokenEnd - token.tokenStart);
 }
 
+std::string Parser::getTokenLocation(const Token& token) {
+        return {std::to_string(token.line) + ":" + std::to_string(token.column) + " "};
+}
+
 Token Parser::expect(const Tokens tokenType) {
         const Token token = tokens[position];
         if (token.tokenType == tokenType) {
@@ -18,9 +22,8 @@ Token Parser::expect(const Tokens tokenType) {
 
         const std::string& expectedType = tokenStrings[static_cast<int>(tokenType)];
         const std::string& receivedType = tokenStrings[static_cast<int>(token.tokenType)];
-        std::string errorMessage = "EXPECTED \'" + expectedType + "\' BUT GOT \'" + receivedType + "\' INSTEAD AT ";
-        errorMessage.append(std::to_string(token.tokenStart));
-        throw std::logic_error(errorMessage);
+        const std::string errorMessage = "EXPECTED \'" + expectedType + "\' BUT GOT \'" + receivedType + "\' INSTEAD";
+        throw std::logic_error(getTokenLocation(token) + errorMessage);
 }
 
 std::string Parser::parseType() {
@@ -228,7 +231,10 @@ Expr Parser::parsePrimary() {
                 }
 
                 default:
-                        throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
+                        throw std::logic_error(
+                                getTokenLocation(peek())
+                                + "UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'"
+                        );
         }
 }
 
@@ -310,7 +316,10 @@ VariableDecl Parser::parseVariableDecl() {
                 return result;
         }
 
-        throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
+        throw std::logic_error(
+                getTokenLocation(peek())
+                + "UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'"
+        );
 }
 
 IfStatement Parser::parseIfStatement() {
@@ -403,7 +412,6 @@ Annotation Parser::parseAnnotation() {
         while (true) {
                 if (peek().tokenType == Tokens::STR) {
                         ++position;
-                        // TODO(parser) Add support for interp
                         const std::string name{unescapeString(std::string(getTokenStr(expect(Tokens::STR_LITERAL))))};
                         result.args.push_back({AnnotationArg::Type::STR, name});
                         expect(Tokens::STR);
@@ -425,7 +433,10 @@ Annotation Parser::parseAnnotation() {
                         result.args.push_back({AnnotationArg::Type::FLOATING, name});
                         ++position;
                 } else {
-                        throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + '\'');
+                        throw std::logic_error(
+                                getTokenLocation(peek())
+                                + "UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + '\''
+                        );
                 }
 
                 if (peek().tokenType == Tokens::R_BRACE) break;
@@ -538,7 +549,10 @@ Node Parser::parseStatement() {
                 return Node{start, position, parseArrowAssignment()};
         }
 
-        throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'");
+        throw std::logic_error(
+                getTokenLocation(peek())
+                + "UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(peek().tokenType)] + "\'"
+        );
 }
 
 FunctionPrototype Parser::parsePrototype() {
@@ -646,7 +660,10 @@ void Parser::run() {
                                 }
 
                                 if (const auto type =  peek(i).tokenType; type != Tokens::IDENTIFIER) {
-                                        throw std::logic_error("UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(type)] + "\'");
+                                        throw std::logic_error(
+                                                getTokenLocation(peek(i))
+                                                + "UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(type)] + "\'")
+                                        ;
                                 }
 
                                 ++i;
@@ -655,6 +672,9 @@ void Parser::run() {
                         continue;
                 }
 
-                throw std::logic_error("UNKNOWN TOKEN TYPE " + tokenStrings[static_cast<int>(peek().tokenType)]);
+                throw std::logic_error(
+                        getTokenLocation(peek())
+                        + "UNKNOWN TOKEN TYPE " + tokenStrings[static_cast<int>(peek().tokenType)]
+                );
         }
 }

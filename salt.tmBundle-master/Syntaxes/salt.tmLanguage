@@ -16,7 +16,7 @@
     <array>
     <dict>
         <key>match</key>
-        <string>(#define)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+(.+)$</string>
+        <string>(#define)\s+([a-zA-Z_][a-zA-Z0-9_]*)</string>
         <key>captures</key>
         <dict>
             <key>1</key>
@@ -28,11 +28,6 @@
             <dict>
                 <key>name</key>
                 <string>constant.other.define.salt</string>
-            </dict>
-            <key>3</key>
-            <dict>
-                <key>name</key>
-                <string>meta.preprocessor.value.salt</string>
             </dict>
         </dict>
     </dict>

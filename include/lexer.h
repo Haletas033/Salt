@@ -11,8 +11,12 @@
 
 struct Token {
         Tokens tokenType{};
-        unsigned long tokenStart{};
-        unsigned long tokenEnd{};
+        size_t tokenStart{};
+        size_t tokenEnd{};
+
+        size_t line{};
+        size_t column{};
+
 };
 
 enum class IdentifierType {
@@ -28,9 +32,15 @@ enum class InsideType {
 
 class Lexer {
 private:
-        unsigned long position{};
+        size_t position{};
+        size_t currentLine = 1;
+        size_t currentColumn = 1;
 
         std::optional<TokenDef> matchToken();
+
+        void advance();
+
+        void advance(size_t count);
 
         void releaseIdentifier(std::string &currentIdentifier, IdentifierType currentIdentifierType);
 

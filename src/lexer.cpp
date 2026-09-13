@@ -20,11 +20,27 @@ std::optional<TokenDef> Lexer::matchToken() {
         return best;
 }
 
+void Lexer::advance() {
+        if (source[position] == '\n') {
+                ++currentLine;
+                currentColumn = 1;
+        } else {
+                ++currentColumn;
+        }
+        ++position;
+}
+
+void Lexer::advance(const size_t count) {
+        for (size_t i = 0; i < count; ++i) advance();
+}
+
 void Lexer::releaseIdentifier(std::string &currentIdentifier, const IdentifierType currentIdentifierType) {
         if (!currentIdentifier.empty()) {
                 auto token = Token{
                         .tokenStart = position - currentIdentifier.size(),
-                        .tokenEnd = position
+                        .tokenEnd = position,
+                        .line = currentLine,
+                        .column = currentColumn
                 };
                 switch (currentIdentifierType) {
 
@@ -64,7 +80,7 @@ void Lexer::skipComments() {
 
         if (isMultiLineComment) {
                 while (position + 1 < source.size()) {
-                        ++position;
+                        advance();
                         if (source[position] == '*' && source[position+1] == '/') { break; }
                 }
                 if (position + 1 < source.size()) { position += 2; } // Skip '*/'
@@ -166,14 +182,18 @@ void Lexer::run() {
                                 const bool isInsideToken = match->token == Tokens::STR || match->token == Tokens::CHAR || match->token == Tokens::INTERP;
                                 if (isInsideToken || (previousIdentifierType != IdentifierType::STR && previousIdentifierType != IdentifierType::CHAR)) {
                                         // Release current identifier if any
+                                        const size_t identifierStartLine = currentLine;
+                                        const size_t identifierStartColumn = currentColumn;
                                         releaseIdentifier(currentIdentifier, previousIdentifierType);
 
                                         const auto tokenStart = position;
-                                        position += match->text.size();
+                                        advance(match->text.size());
                                         tokens.push_back(Token{
-                                            .tokenType = match->token,
-                                            .tokenStart = tokenStart,
-                                            .tokenEnd = position
+                                                .tokenType = match->token,
+                                                .tokenStart = tokenStart,
+                                                .tokenEnd = position,
+                                                .line = identifierStartLine,
+                                                .column = identifierStartColumn
                                         });
                                         continue;
                                 }
@@ -183,7 +203,7 @@ void Lexer::run() {
                 if (source[position] == ' ' || source[position] == '\n' || source[position] == '\t' || source[position] == '\r') {
                         if (currentIdentifierType != IdentifierType::STR && currentIdentifierType != IdentifierType::CHAR) {
                                 releaseIdentifier(currentIdentifier, currentIdentifierType);
-                                ++position;
+                                advance();
                                 continue;
                         }
                 }
@@ -204,12 +224,14 @@ void Lexer::run() {
                         }
                 }
 
-                ++position;
+                advance();
         }
         releaseIdentifier(currentIdentifier, currentIdentifierType);
         tokens.push_back(Token{
             .tokenType = Tokens::EOF_TOKEN,
             .tokenStart = position - 1,
-            .tokenEnd = position
+            .tokenEnd = position,
+            .line = currentLine,
+            .column = currentColumn
         });
 }

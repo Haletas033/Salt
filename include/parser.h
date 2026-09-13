@@ -267,6 +267,8 @@ private:
 
         [[nodiscard]] std::string_view getTokenStr(const Token& token) const;
 
+        static std::string getTokenLocation(const Token &token) ;
+
         void run();
 public:
         Program program;
