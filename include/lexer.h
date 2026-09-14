@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "compilerOptions.h"
 #include "tokens.h"
 
 struct Token {
@@ -36,6 +37,8 @@ private:
         size_t currentLine = 1;
         size_t currentColumn = 1;
 
+        CompilerOptions compilerOptions{};
+
         std::optional<TokenDef> matchToken();
 
         void advance();
@@ -54,7 +57,7 @@ public:
         std::string source{};
         std::vector<Token> tokens{};
 
-        explicit Lexer(std::string file) : source(std::move(file)) {
+        explicit Lexer(std::string file, CompilerOptions options) : compilerOptions(std::move(options)), source(std::move(file)) {
                 run();
         }
 };

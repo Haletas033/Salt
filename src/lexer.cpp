@@ -234,4 +234,10 @@ void Lexer::run() {
             .line = currentLine,
             .column = currentColumn
         });
+
+        if (compilerOptions.emitTokens) {
+                for (const auto& token : tokens) {
+                        std::cout << tokenStrings[static_cast<int>(token.tokenType)] << " ";
+                }
+        }
 }

@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 find_package(LLVM REQUIRED CONFIG)
 
-add_executable(Salt
+add_executable(salt_shaker
         src/main.cpp
         src/lexer.cpp
         include/lexer.h
@@ -16,12 +16,15 @@ add_executable(Salt
         src/codegen.cpp
         include/preprocessor.h
         src/preprocessor.cpp
+        include/compiler.h
+        include/compilerOptions.h
+        src/compiler.cpp
 )
 
-target_include_directories(Salt PRIVATE
+target_include_directories(salt_shaker PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${LLVM_INCLUDE_DIRS}
 )
 
-target_link_libraries(Salt PRIVATE LLVM-22)
-target_compile_definitions(Salt PRIVATE ${LLVM_DEFINITIONS})
+target_link_libraries(salt_shaker PRIVATE LLVM-22)
+target_compile_definitions(salt_shaker PRIVATE ${LLVM_DEFINITIONS})

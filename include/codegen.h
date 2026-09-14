@@ -16,12 +16,17 @@
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Passes/PassBuilder.h>
 
+#include "compilerOptions.h"
 #include "parser.h"
+
+struct CompilerOptions;
 
 class Codegen {
 private:
         Program program;
         llvm::LLVMContext context;
+
+        CompilerOptions compilerOptions{};
 
         llvm::Function* currentFunction = nullptr;
 
@@ -39,6 +44,8 @@ private:
         static llvm::Value *castTo(llvm::Value *value, llvm::Type *targetType, llvm::IRBuilder<> &builder);
 
         void emitAnnotation(const Annotation &annotation);
+
+        llvm::Value *emitStringConcat(llvm::Value *a, llvm::Value *b, llvm::IRBuilder<> &builder);
 
         llvm::Value *emitExpr(const Expr &expr, llvm::IRBuilder<> &builder);
 
@@ -90,10 +97,10 @@ private:
 
 public:
         llvm::Module module;
-        Codegen(Program program, const std::string& filename)
-        : program(std::move(program)),
-              module(filename, context) {
-                        run();
+        Codegen(Program program, const CompilerOptions& options)
+        : program(std::move(program)), compilerOptions(options),
+        module(options.inputFile, context) {
+                run();
         }
 };
 

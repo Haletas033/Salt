@@ -1,5 +1,4 @@
 #include <codegen.h>
-#include <iostream>
 
 llvm::Type* Codegen::resolveType(const std::string& type) {
         if (type.find('[') != std::string::npos) {
@@ -47,6 +46,26 @@ llvm::Value* Codegen::castTo(llvm::Value* value, llvm::Type* targetType, llvm::I
 
 void Codegen::emitAnnotation(const Annotation& annotation) {
 
+}
+
+llvm::Value* Codegen::emitStringConcat(llvm::Value* a, llvm::Value* b, llvm::IRBuilder<>& builder) {
+        llvm::Function* strlenFn = module.getFunction("strlen");
+        llvm::Function* mallocFn = module.getFunction("malloc");
+        llvm::Function* strcpyFn = module.getFunction("strcpy");
+        llvm::Function* strcatFn = module.getFunction("strcat");
+
+        if (!strlenFn || !mallocFn || !strcpyFn || !strcatFn) {
+                throw std::logic_error("STRING OPERATIONS REQUIRE strlen, malloc, strcpy, strcat TO BE DECLARED VIA @externC");
+        }
+
+        llvm::Value* lenA = builder.CreateCall(strlenFn, {a});
+        llvm::Value* lenB = builder.CreateCall(strlenFn, {b});
+        llvm::Value* total = builder.CreateAdd(lenA, lenB);
+        llvm::Value* totalPlusOne = builder.CreateAdd(total, llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 1));
+        llvm::Value* result = builder.CreateCall(mallocFn, {totalPlusOne});
+        builder.CreateCall(strcpyFn, {result, a});
+        builder.CreateCall(strcatFn, {result, b});
+        return result;
 }
 
 llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
@@ -110,7 +129,13 @@ llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
                         llvm::Value *left = emitExpr(*value.lvalue, builder);
                         llvm::Value *right = emitExpr(*value.rvalue, builder);
                         switch (value.op.type) {
-                                case Operator::Type::ADD: return builder.CreateAdd(left, right);
+                                case Operator::Type::ADD: {
+                                        // check if both are pointer types (strings)
+                                        if (left->getType()->isPointerTy() && right->getType()->isPointerTy()) {
+                                                return emitStringConcat(left, right, builder);
+                                        }
+                                        return builder.CreateAdd(left, right);
+                                }
                                 case Operator::Type::SUB: return builder.CreateSub(left, right);
                                 case Operator::Type::MUL: return builder.CreateMul(left, right);
                                 case Operator::Type::DIV: return builder.CreateSDiv(left, right);
@@ -276,6 +301,11 @@ llvm::Value *Codegen::emitSizeOf(const SizeOf &sizeOf) {
 }
 
 void Codegen::emitVariableDecl(const VariableDecl& decl, llvm::IRBuilder<>& entryBuilder, llvm::IRBuilder<>& builder) {
+        entryBuilder.SetInsertPoint(
+                &currentFunction->getEntryBlock(),
+                currentFunction->getEntryBlock().begin()
+        );
+
         if (locals.contains(decl.name)) {
                 throw std::logic_error("REDEFINITION OF VARIABLE \'" + decl.name + "\'");
         }
@@ -537,16 +567,21 @@ void Codegen::run() {
         for (const Node& node : program) {
                 std::visit([this]<typename V>(const V& value) {
                         using T = std::decay_t<V>;
-                        if constexpr (std::is_same_v<T, Annotation>) {
-                                emitAnnotation(value);
-                        } else if constexpr (std::is_same_v<T, ExternC>) {
-                                emitExternC(value);
-                        } else if constexpr (std::is_same_v<T, FunctionDef>) {
-                                emitFunctionDef(value);
+                        if constexpr (std::is_same_v<T, FunctionDef>) {
+                                emitPrototype(value.prototype);
                         } else if constexpr (std::is_same_v<T, StructDef>) {
                                 emitStructDef(value);
-                        } else {
-                                throw std::logic_error("UNSUPPORTED NODE TYPE");
+                        } else if constexpr (std::is_same_v<T, ExternC>) {
+                                emitExternC(value);
+                        }
+                }, node.value);
+        }
+
+        for (const Node& node : program) {
+                std::visit([this]<typename V>(const V& value) {
+                        using T = std::decay_t<V>;
+                        if constexpr (std::is_same_v<T, FunctionDef>) {
+                                emitFunctionDef(value);
                         }
                 }, node.value);
         }
@@ -567,11 +602,13 @@ void Codegen::run() {
         mpm.run(module, mam);
 
         std::error_code ec;
-        llvm::raw_fd_ostream output("output.o", ec);
+        llvm::raw_fd_ostream output(compilerOptions.outputFile + ".o", ec);
         llvm::legacy::PassManager pass;
         machine->addPassesToEmitFile(pass, output, nullptr, llvm::CodeGenFileType::ObjectFile);
         pass.run(module);
         output.flush();
 
-        system("clang -o output output.o");
+        if (compilerOptions.emitIR) {
+                module.print(llvm::outs(), nullptr);
+        }
 }
