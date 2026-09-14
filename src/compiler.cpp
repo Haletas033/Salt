@@ -80,17 +80,34 @@ void Compiler::processAnnotations() {
 
                         if (ann->name == "requires") {
                                 for (const auto&[type, value] : ann->args) {
-                                        std::string depPath = meta["CURRENT_DIR"] + "/" + value + ".salt";
+                                        std::string sourceDir = std::filesystem::absolute(options.inputFile).parent_path().string();
 
-                                        if (needsRecompile(depPath, value + ".o")) {
+                                        std::string depPath = (std::filesystem::path(sourceDir) / (value + ".salt")).string();
+
+                                        if (!std::filesystem::exists(depPath)) {
+                                                const char* saltPath = std::getenv("SALT_PATH");
+                                                if (!saltPath) throw std::logic_error("COULD NOT FIND: " + value + ".salt");
+                                                depPath = (std::filesystem::path(saltPath) / (value + ".salt")).string();
+                                        }
+
+                                        if (!std::filesystem::exists(depPath)) {
+                                                throw std::logic_error("COULD NOT FIND: " + value + ".salt in local or SALT_PATH");
+                                        }
+
+                                        std::string depObjFile = (std::filesystem::path(depPath).parent_path() /
+                                        (std::filesystem::path(depPath).stem().string() + ".o")).string();
+
+                                        if (needsRecompile(depPath, depObjFile)) {
                                                 CompilerOptions depOptions;
                                                 depOptions.inputFile = depPath;
-                                                depOptions.outputFile = value;
+                                                depOptions.outputFile = (std::filesystem::path(depPath).parent_path() /
+                                                                         std::filesystem::path(depPath).stem().string()).string();
                                                 depOptions.isDependency = true;
                                                 Compiler dep(depOptions);
                                         }
 
-                                        requiredObjects.push_back(value + ".o");
+                                        requiredObjects.push_back(depObjFile);
+
                                         std::ifstream depFile(depPath);
                                         if (!depFile.is_open()) throw std::logic_error("COULD NOT OPEN: " + depPath);
                                         Preprocessor depPrepro(depFile);
