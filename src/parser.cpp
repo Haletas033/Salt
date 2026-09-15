@@ -659,7 +659,7 @@ void Parser::run() {
                                         break;
                                 }
 
-                                if (const auto type =  peek(i).tokenType; type != Tokens::IDENTIFIER) {
+                                if (const auto type =  peek(i).tokenType; type != Tokens::IDENTIFIER && type != Tokens::STAR) {
                                         throw std::logic_error(
                                                 getTokenLocation(peek(i))
                                                 + "UNEXPECTED TOKEN \'" + tokenStrings[static_cast<int>(type)] + "\'")

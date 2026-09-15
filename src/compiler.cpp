@@ -78,6 +78,12 @@ void Compiler::processAnnotations() {
                                 }
                         }
 
+                        if (ann->name == "linkC") {
+                                for (const auto&[type, value] : ann->args) {
+                                        requiredObjects.push_back(value);
+                                }
+                        }
+
                         if (ann->name == "requires") {
                                 for (const auto&[type, value] : ann->args) {
                                         std::string sourceDir = std::filesystem::absolute(options.inputFile).parent_path().string();
