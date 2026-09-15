@@ -1,0 +1,40 @@
+@as { library };
+
+@linkC {
+        "stdio.o"
+};
+
+@externC {
+        void* salt_stdout(void),
+        void* salt_stderr(void),
+        void* salt_stdin(void),
+        i32 fprintf(i8* file, i8* fmt, ...),
+        i64 getline(i8** lineptr, i64* n, i8* stream)
+
+};
+
+@requires { Memory };
+
+%void print(i8* msg) {
+        fprintf(salt_stdout(), "%s", msg);
+}
+
+%void println(i8* msg) {
+        fprintf(salt_stdout(), "%s\n", msg);
+}
+
+%void eprint(i8* msg) {
+        fprintf(salt_stderr(), "%s", msg);
+}
+
+%void eprintln(i8* msg) {
+        fprintf(salt_stderr(), "%s\n", msg);
+}
+
+%i8* readline() {
+        %i8* buf = alloc(0);
+        %i64 size = 0;
+        getline(&buf, &size, salt_stdin());
+        return buf;
+}
+

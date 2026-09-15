@@ -1,27 +1,22 @@
-cmake_minimum_required(VERSION 4.3)
+cmake_minimum_required(VERSION 3.20)
 project(Salt)
 
-set(CMAKE_CXX_STANDARD 20)
+set(SALT_COMPILER "${CMAKE_SOURCE_DIR}/salt_shaker")
+set(SALT_PATH, "${CMAKE_SOURCE_DIR}/std")
 
-find_package(LLVM REQUIRED CONFIG)
-
-add_executable(Salt
-        src/main.cpp
-        src/lexer.cpp
-        include/lexer.h
-        include/tokens.h
-        src/parser.cpp
-        include/parser.h
-        include/codegen.h
-        src/codegen.cpp
-        include/preprocessor.h
-        src/preprocessor.cpp
+set(SALT_SOURCES
+        src/main.salt
 )
 
-target_include_directories(Salt PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${LLVM_INCLUDE_DIRS}
+add_custom_command(
+        OUTPUT ${CMAKE_BINARY_DIR}/salt_shaker
+        COMMAND ${CMAKE_COMMAND} -E env SALT_PATH=$ENV{SALT_PATH}
+        ${SALT_COMPILER} ${CMAKE_SOURCE_DIR}/src/main.salt
+        -o ${CMAKE_BINARY_DIR}/salt_shaker
+        DEPENDS ${SALT_SOURCES}
+        COMMENT "Compiling Salt Shaker..."
 )
 
-target_link_libraries(Salt PRIVATE LLVM-22)
-target_compile_definitions(Salt PRIVATE ${LLVM_DEFINITIONS})
+add_custom_target(SaltShaker ALL
+        DEPENDS ${CMAKE_BINARY_DIR}/salt_shaker
+)

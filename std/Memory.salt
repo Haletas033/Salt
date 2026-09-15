@@ -1,0 +1,33 @@
+@as { library };
+
+@linkC {
+        "mem.o"
+};
+
+@externC {
+        void* c_malloc(i64 size),
+        void* c_realloc(void* ptr, i64 size),
+        void c_free(void* ptr),
+        void* memcpy(void* dst, void* src, i64 size),
+        void* memset(void* dst, i32 val, i64 size)
+};
+
+%void* alloc(i64 size) {
+        return { c_malloc(size) };
+}
+
+%void* realloc(void* ptr, i64 size) {
+        return { c_realloc(ptr, size) };
+}
+
+%void dealloc(void* ptr) {
+        return { c_free(ptr) };
+}
+
+%void* mem_copy(void* dst, void* src, i64 size) {
+        return { memcpy(dst, src, size) };
+}
+
+%void* mem_set(void* dst, i32 val, i64 size) {
+        return { memset(dst, val, size) };
+}

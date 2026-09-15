@@ -1,0 +1,6 @@
+@as { standalone };
+
+%i32 main(void) {
+
+    return { SUCCESS };
+}
