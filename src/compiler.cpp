@@ -142,10 +142,19 @@ void Compiler::processAnnotations() {
                                                 if (const auto* ext = std::get_if<ExternC>(&depNode.value)) {
                                                         injected.push_back({0, 0, *ext});
                                                 }
-                                                if (const auto* appAnn = std::get_if<Annotation>(&depNode.value)) {
-                                                        if (ann->name == "linkC") {
-                                                                for (const auto&[annType, annValue] : ann->args) {
-                                                                        requiredObjects.push_back(value);
+                                                if (const auto* annDep = std::get_if<Annotation>(&depNode.value)) {
+                                                        if (annDep->name == "linkC") {
+                                                                std::string depSourceDir = std::filesystem::path(depPath).parent_path().string();
+                                                                for (const auto&[type, value] : annDep->args) {
+                                                                        std::string objPath = (std::filesystem::path(depSourceDir) / value).string();
+
+                                                                        if (!std::filesystem::exists(objPath)) {
+                                                                                const char* saltPath = std::getenv("SALT_PATH");
+                                                                                if (saltPath) {
+                                                                                        objPath = (std::filesystem::path(saltPath) / value).string();
+                                                                                }
+                                                                        }
+                                                                        requiredObjects.push_back(objPath);
                                                                 }
                                                         }
                                                 }
