@@ -66,6 +66,8 @@ void Compiler::processAnnotations() {
 
         std::vector<Node> injected;
 
+        std::string sourceDir = std::filesystem::absolute(options.inputFile).parent_path().string();
+
         for (const auto& node : program) {
                 if (const auto* ann = std::get_if<Annotation>(&node.value)) {
                         if (ann->name == "meta" && ann->args.size() >= 2) {
@@ -80,14 +82,22 @@ void Compiler::processAnnotations() {
 
                         if (ann->name == "linkC") {
                                 for (const auto&[type, value] : ann->args) {
-                                        requiredObjects.push_back(value);
+                                        std::string objPath = (std::filesystem::path(sourceDir) / value).string();
+                                        if (!std::filesystem::exists(objPath)) {
+                                                const char* saltPath = std::getenv("SALT_PATH");
+                                                if (saltPath) {
+                                                        objPath = (std::filesystem::path(saltPath) / value).string();
+                                                }
+                                        }
+                                        if (!std::filesystem::exists(objPath)) {
+                                                throw std::logic_error("COULD NOT FIND LINK OBJECT: " + value);
+                                        }
+                                        requiredObjects.push_back(objPath);
                                 }
                         }
 
                         if (ann->name == "requires") {
                                 for (const auto&[type, value] : ann->args) {
-                                        std::string sourceDir = std::filesystem::absolute(options.inputFile).parent_path().string();
-
                                         std::string depPath = (std::filesystem::path(sourceDir) / (value + ".salt")).string();
 
                                         if (!std::filesystem::exists(depPath)) {
@@ -128,6 +138,16 @@ void Compiler::processAnnotations() {
                                                 }
                                                 if (const auto* s = std::get_if<StructDef>(&depNode.value)) {
                                                         injected.push_back({0, 0, *s});
+                                                }
+                                                if (const auto* ext = std::get_if<ExternC>(&depNode.value)) {
+                                                        injected.push_back({0, 0, *ext});
+                                                }
+                                                if (const auto* appAnn = std::get_if<Annotation>(&depNode.value)) {
+                                                        if (ann->name == "linkC") {
+                                                                for (const auto&[annType, annValue] : ann->args) {
+                                                                        requiredObjects.push_back(value);
+                                                                }
+                                                        }
                                                 }
                                         }
                                 }
