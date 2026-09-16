@@ -47,6 +47,8 @@ private:
 
         llvm::Value *emitStringConcat(llvm::Value *a, llvm::Value *b, llvm::IRBuilder<> &builder);
 
+        static llvm::Value *coerceComparison(llvm::CmpInst::Predicate cmp, llvm::Value *left, llvm::Value *right, llvm::IRBuilder<> &builder);
+
         llvm::Value *emitExpr(const Expr &expr, llvm::IRBuilder<> &builder);
 
         void emitArrayAssignment(const ArrayAssignment &assign, llvm::IRBuilder<> &builder);

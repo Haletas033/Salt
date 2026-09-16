@@ -68,6 +68,21 @@ llvm::Value* Codegen::emitStringConcat(llvm::Value* a, llvm::Value* b, llvm::IRB
         return result;
 }
 
+llvm::Value *Codegen::coerceComparison(const llvm::CmpInst::Predicate cmp,
+        llvm::Value *left, llvm::Value *right, llvm::IRBuilder<>& builder)
+{
+        if (left->getType() != right->getType()) {
+                if (left->getType()->isIntegerTy() && right->getType()->isIntegerTy()) {
+                        if (left->getType()->getIntegerBitWidth() < right->getType()->getIntegerBitWidth()) {
+                                left = builder.CreateSExt(left, right->getType());
+                        } else {
+                                right = builder.CreateSExt(right, left->getType());
+                        }
+                }
+        }
+        return builder.CreateICmp(cmp, left, right);
+}
+
 llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
         return std::visit([this, &builder]<typename V>(const V& value) -> llvm::Value* {
                 using T = std::decay_t<V>;
@@ -95,13 +110,25 @@ llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
                 } else if constexpr (std::same_as<T, ArrayIndex>) {
                         auto it = locals.find(value.name);
                         if (it == locals.end()) throw std::logic_error("UNDEFINED VARIABLE '" + value.name + "'");
-                        llvm::Value* index = emitExpr(*value.index, builder);
-                        llvm::Type* allocaType = it->second.first->getAllocatedType();
-                        llvm::Value* gep = builder.CreateGEP(allocaType, it->second.first, {
-                        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0),
-                                index
-                        });
-                        return builder.CreateLoad(allocaType->getArrayElementType(), gep);
+
+                        llvm::Value *index = emitExpr(*value.index, builder);
+                        llvm::Type *allocaType = it->second.first->getAllocatedType();
+
+                        if (allocaType->isArrayTy()) {
+                                llvm::Value *gep = builder.CreateGEP(allocaType, it->second.first, {
+                                llvm::ConstantInt::get(
+                                        llvm::Type::getInt32Ty(context),
+                                        0),
+                                        index
+                                });
+                                return builder.CreateLoad(allocaType->getArrayElementType(), gep);
+                        }
+                        const std::string declaredType = it->second.second;
+                        const std::string elementTypeName = declaredType.substr(0, declaredType.size() - 1);
+                        llvm::Type *elementType = resolveType(elementTypeName);
+                        llvm::Value *ptr = builder.CreateLoad(allocaType, it->second.first);
+                        llvm::Value *gep = builder.CreateGEP(elementType, ptr, index);
+                        return builder.CreateLoad(elementType, gep);
                 } else if constexpr (std::same_as<T, Deref>) {
                         llvm::Value *ptr = emitExpr(*value.pointer, builder);
 
@@ -143,12 +170,12 @@ llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
                                 case Operator::Type::AND: return builder.CreateAnd(left, right);
                                 case Operator::Type::XOR: return builder.CreateXor(left, right);
                                 case Operator::Type::OR:  return builder.CreateOr(left, right);
-                                case Operator::Type::EQ:  return builder.CreateICmp(llvm::CmpInst::ICMP_EQ,  left, right);
-                                case Operator::Type::NEQ: return builder.CreateICmp(llvm::CmpInst::ICMP_NE,  left, right);
-                                case Operator::Type::LT:  return builder.CreateICmp(llvm::CmpInst::ICMP_SLT, left, right);
-                                case Operator::Type::GT:  return builder.CreateICmp(llvm::CmpInst::ICMP_SGT, left, right);
-                                case Operator::Type::LTE: return builder.CreateICmp(llvm::CmpInst::ICMP_SLE, left, right);
-                                case Operator::Type::GTE: return builder.CreateICmp(llvm::CmpInst::ICMP_SGE, left, right);
+                                case Operator::Type::EQ:  return coerceComparison(llvm::CmpInst::ICMP_EQ,  left, right, builder);
+                                case Operator::Type::NEQ: return coerceComparison(llvm::CmpInst::ICMP_NE,  left, right, builder);
+                                case Operator::Type::LT:  return coerceComparison(llvm::CmpInst::ICMP_SLT, left, right, builder);
+                                case Operator::Type::GT:  return coerceComparison(llvm::CmpInst::ICMP_SGT, left, right, builder);
+                                case Operator::Type::LTE: return coerceComparison(llvm::CmpInst::ICMP_SLE, left, right, builder);
+                                case Operator::Type::GTE: return coerceComparison(llvm::CmpInst::ICMP_SGE, left, right, builder);
                                 case Operator::Type::LOGICAL_AND: {
                                         llvm::Value* leftBool = builder.CreateICmpNE(left, llvm::ConstantInt::get(left->getType(), 0));
                                         llvm::Value* rightBool = builder.CreateICmpNE(right, llvm::ConstantInt::get(right->getType(), 0));
@@ -177,13 +204,23 @@ void Codegen::emitArrayAssignment(const ArrayAssignment& assign, llvm::IRBuilder
         llvm::Value* index = emitExpr(*assign.index, builder);
         llvm::Type* allocaType = it->second.first->getAllocatedType();
 
-        llvm::Value* gep = builder.CreateGEP(allocaType, it->second.first, {
-            llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0),
-            index
-        });
+        llvm::Value* gep;
+        llvm::Type* elementType;
+        if (allocaType->isArrayTy()) {
+                elementType = allocaType->getArrayElementType();
+                gep = builder.CreateGEP(allocaType, it->second.first, {
+                        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0),
+                        index
+                });
+        } else {
+                const std::string declaredType = it->second.second;
+                const std::string elementTypeName = declaredType.substr(0, declaredType.size() - 1);
+                elementType = resolveType(elementTypeName);
+                llvm::Value* ptr = builder.CreateLoad(allocaType, it->second.first);
+                gep = builder.CreateGEP(llvm::Type::getInt8Ty(context), ptr, index);
+        }
 
         llvm::Value* value = emitExpr(*assign.value, builder);
-        llvm::Type* elementType = allocaType->getArrayElementType();
         value = castTo(value, elementType, builder);
 
         builder.CreateStore(value, gep);
