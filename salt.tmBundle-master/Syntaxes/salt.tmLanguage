@@ -90,7 +90,7 @@
 
     <dict>
         <key>match</key>
-        <string>\b(SUCCESS|FAILURE|true|false)\b</string>
+        <string>\b(SUCCESS|FAILURE|true|false|nullptr)\b</string>
         <key>name</key>
         <string>constant.language.salt</string>
     </dict>

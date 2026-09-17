@@ -95,6 +95,13 @@ llvm::Value *Codegen::emitExpr(const Expr &expr, llvm::IRBuilder<> &builder) {
                                 return llvm::ConstantInt::get(llvm::Type::getInt1Ty(context), 1);
                         if (value.name == "false")
                                 return llvm::ConstantInt::get(llvm::Type::getInt1Ty(context), 0);
+
+                        if (value.name == "nullptr") {
+                                return llvm::ConstantPointerNull::get(
+                                        llvm::PointerType::get(context, 0)
+                                );
+                        }
+
                         if (value.name == "SUCCESS")
                                 return llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0);
                         if (value.name == "FAILURE")
