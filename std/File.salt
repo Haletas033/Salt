@@ -1,0 +1,56 @@
+@as { library };
+
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
+
+%struct FILE {};
+
+@externC {
+        FILE* fopen(i8* path, i8* mode),
+        void fclose(FILE* stream),
+        i32 fseek(FILE* stream, i64 offset, i32 whence),
+        i64 ftell(FILE* stream),
+        i64 fread(void* ptr, i64 size, i64 nmemb, FILE* stream)
+};
+
+@requires { Memory };
+
+%FILE* file_open(i8* path, i8* mode) {
+        return fopen(path, mode);
+}
+
+%void file_close(FILE* stream) {
+        return { fclose(stream) };
+}
+
+%i64 get_file_size(i8* path) {
+        %FILE* stream = fopen(path, "r");
+        if (fseek(stream, 0, SEEK_END) != 0) {
+                fclose(stream);
+                return { 0-1 };
+        }
+
+        %i64 size = ftell(stream);
+
+        if (fseek(stream, 0, SEEK_SET) != 0) {
+                fclose(stream);
+                return { 0-1 };
+        }
+
+        fclose(stream);
+
+        return { size };
+}
+
+%i8 file_exists(i8* path) {
+        if (fopen(path, "r") == nullptr) {
+                return { false };
+        }
+        return { true };
+}
+
+%i64 file_read(FILE* stream, i8* buf, i64 count) {
+        return { fread(buf, 1, count, stream) };
+}
+
