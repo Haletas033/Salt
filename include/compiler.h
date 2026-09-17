@@ -10,10 +10,10 @@
 #include "parser.h"
 #include "preprocessor.h"
 
-constexpr std::string VERSION = "v0.1.4";
+constexpr std::string VERSION = "v0.1.5";
 
 constexpr auto HELP_MESSAGE = R"(
-Salt compiler v0.1.4
+Salt compiler v0.1.5
 Usage: salt <file> [options]
 Options:
   -o <name>      Output binary name (default: output)
