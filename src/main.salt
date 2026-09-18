@@ -1,6 +1,15 @@
 @as { standalone };
 
-%i32 main(void) {
+@externC {
+        void printf(i8* fmt, ...)
+};
 
-    return { SUCCESS };
+@requires { IO, Memory, File };
+
+%i32 main(void) {
+        %FILE* f = file_open("test.txt", "r");
+        %FileData* file_data = file_read_all(f);
+        printf("%.*s", file_data->size, file_data->data);
+        file_close(f);
+        return { SUCCESS };
 }

@@ -11,10 +11,16 @@
         void fclose(FILE* stream),
         i32 fseek(FILE* stream, i64 offset, i32 whence),
         i64 ftell(FILE* stream),
+        i32 fprintf(FILE* stream, i8* fmt, ...),
         i64 fread(void* ptr, i64 size, i64 nmemb, FILE* stream)
 };
 
 @requires { Memory };
+
+%struct FileData {
+        %i64 .size;
+        %i8* .data;
+};
 
 %FILE* file_open(i8* path, i8* mode) {
         return fopen(path, mode);
@@ -24,33 +30,47 @@
         return { fclose(stream) };
 }
 
-%i64 get_file_size(i8* path) {
-        %FILE* stream = fopen(path, "r");
+%i64 get_file_size(FILE* stream) {
         if (fseek(stream, 0, SEEK_END) != 0) {
-                fclose(stream);
                 return { 0-1 };
         }
 
         %i64 size = ftell(stream);
 
         if (fseek(stream, 0, SEEK_SET) != 0) {
-                fclose(stream);
                 return { 0-1 };
         }
-
-        fclose(stream);
 
         return { size };
 }
 
 %i8 file_exists(i8* path) {
-        if (fopen(path, "r") == nullptr) {
+        %FILE* stream = file_open(path, "r");
+        if (stream == nullptr) {
                 return { false };
         }
+        file_close(stream);
         return { true };
 }
 
-%i64 file_read(FILE* stream, i8* buf, i64 count) {
-        return { fread(buf, 1, count, stream) };
+%FileData* file_read(FILE* stream, i64 count) {
+        %FileData* file_data = alloc(sizeof(FileData));
+        %i8* buf = alloc(count);
+        file_data->size = fread(buf, 1, count, stream);
+        file_data->data = buf;
+        return { file_data };
+}
+
+%FileData* file_read_all(FILE* stream) {
+        %FileData* file_data = alloc(sizeof(FileData));
+        %i64 size = get_file_size(stream);
+        %i8* buf = alloc(size);
+        file_data->size = fread(buf, 1, size, stream);
+        file_data->data = buf;
+        return { file_data };
+}
+
+%i32 file_write(FILE* stream, i8* content) {
+        return { fprintf(stream, "%s", content) };
 }
 
